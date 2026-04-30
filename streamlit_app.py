@@ -214,8 +214,23 @@ body {{ background:#0a1628; overflow:hidden; }}
 
         // Kis késleltetés után beanimálódnak a valódi értékek
         setTimeout(function() {{
-            Plotly.react('{chart_id}', finalData, layout, config);
-        }}, 150);
+            var steps = 20;
+            var current = 0;
+            var timer = setInterval(function() {{
+                current++;
+                var ratio = current / steps;
+                var animData = finalData.map(function(trace) {{
+                    var t = JSON.parse(JSON.stringify(trace));
+                    if (t.y) t.y = t.y.map(function(v) {{ return v * ratio; }});
+                    return t;
+                }});
+                Plotly.react('{chart_id}', animData, layout, config);
+                if (current >= steps) {{
+                    clearInterval(timer);
+                    Plotly.react('{chart_id}', finalData, layout, config);
+                }}
+            }}, 40);
+        }}, 200);
     }});
 }})();
 </script>
@@ -285,9 +300,10 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
         "title": {"text": f"Becsült napi energiaköltség (M Ft) | EUR/HUF: {eur_huf:.1f}",
                   "font": {"size": 14, "color": "#f1f5f9"}},
         "margin": {"l": 60, "r": 20, "t": 50, "b": 50},
-        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1"},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
+                  "range": [datumok[0], datumok[-1]], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "Millió Ft", "color": "#cbd5e1",
-                  "range": [min(koltsegek)*0.95, max(koltsegek)*1.08]},
+                  "range": [min(koltsegek)*0.85, max(koltsegek)*1.15]},
         "showlegend": False
     })
     return plotly_chart(adatok, layout, "koltseg", height)
@@ -316,8 +332,10 @@ def homerseklet_chart(datumok, homersekletek, height=420):
         "title": {"text": "Hőmérséklet előrejelzés (°C)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
         "margin": {"l": 60, "r": 20, "t": 50, "b": 50},
-        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1"},
-        "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1"},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
+                  "range": [datumok[0], datumok[-1]], "type": "date"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1",
+                  "range": [min(homersekletek) - 5, max(homersekletek) + 5]},
         "showlegend": False,
         "shapes": [{"type": "line", "x0": datumok[0], "x1": datumok[-1],
                     "y0": -5, "y1": -5,
@@ -385,7 +403,10 @@ with tab1:
             st.session_state.dam_ar_1nap = dam_ar_1nap
             st.session_state.dam_atlag_30 = dam_atlag_30
             st.session_state.dam_valodi = dam_valodi
-        allapot_ph.success(f"✅ Frissítve: {st.session_state.get('frissites_ideje', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}")
+            st.session_state.frissites_ideje = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    if "frissites_ideje" in st.session_state:
+        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
@@ -441,9 +462,14 @@ with tab1:
 
         st.markdown(f"""
         <style>
+        .kartya-sor {{
+            display:flex; gap:8px; margin-bottom:16px;
+            flex-wrap:nowrap; overflow-x:auto;
+        }}
         .kartya {{
-            flex:1; background:#0a1628; border:1px solid #1e3a5f; border-radius:12px;
-            padding:14px 12px; text-align:center; min-width:0;
+            flex:1; min-width:110px; max-width:200px;
+            background:#0a1628; border:1px solid #1e3a5f; border-radius:12px;
+            padding:10px 8px; text-align:center;
             box-shadow:0 2px 12px rgba(0,102,204,0.15);
             cursor:pointer; transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
             text-decoration:none; display:block;
@@ -453,62 +479,63 @@ with tab1:
             transform: translateY(-2px);
         }}
         .kartya-cim {{
-            color:#64748b; font-size:9px; font-family:Inter,sans-serif;
-            letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;
+            color:#64748b; font-size:8px; font-family:Inter,sans-serif;
+            letter-spacing:0.8px; text-transform:uppercase; margin-bottom:4px;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
         }}
         .kartya-ertek {{
-            color:#FF6600; font-size:16px; font-weight:700;
-            font-family:Montserrat,sans-serif;
+            color:#FF6600; font-size:14px; font-weight:700;
+            font-family:Montserrat,sans-serif; white-space:nowrap;
         }}
-        .kartya-trend {{ font-size:13px; margin-top:4px; }}
-        .kartya-sub {{ color:#94a3b8; font-size:11px; margin-top:4px; }}
+        .kartya-trend {{ font-size:11px; margin-top:3px; white-space:nowrap; }}
+        .kartya-sub {{ color:#94a3b8; font-size:10px; margin-top:3px; white-space:nowrap; }}
         </style>
 
-        <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:nowrap;">
+        <div class="kartya-sor">
 
-          <a class="kartya" href="#grafikon-fogyasztas" onclick="navigalj('tab-fogyasztas')">
+          <a class="kartya" onclick="navigalj('tab-fogyasztas')">
             <div class="kartya-cim">⚡ Heti fogyasztás</div>
             <div class="kartya-ertek">{heti_fogyasztas:,.0f} MWh</div>
             <div class="kartya-trend" style="color:{trend_fog_szin};">{trend_fog} heti trend</div>
           </a>
 
-          <a class="kartya" href="#grafikon-koltseg" onclick="navigalj('tab-koltseg')">
+          <a class="kartya" onclick="navigalj('tab-koltseg')">
             <div class="kartya-cim">💰 Heti költség</div>
             <div class="kartya-ertek">{heti_koltseg:.1f} M Ft</div>
             <div class="kartya-trend" style="color:{trend_koltseg_szin};">{trend_koltseg} heti trend</div>
           </a>
 
-          <a class="kartya" href="#grafikon-fogyasztas" onclick="navigalj('tab-fogyasztas')">
+          <a class="kartya" onclick="navigalj('tab-fogyasztas')">
             <div class="kartya-cim">📈 Csúcs</div>
             <div class="kartya-ertek">{max_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{max_nap['datum'].strftime('%m.%d')}</div>
           </a>
 
-          <a class="kartya" href="#grafikon-fogyasztas" onclick="navigalj('tab-fogyasztas')">
+          <a class="kartya" onclick="navigalj('tab-fogyasztas')">
             <div class="kartya-cim">📉 Minimum</div>
             <div class="kartya-ertek">{min_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{min_nap['datum'].strftime('%m.%d')}</div>
           </a>
 
-          <a class="kartya" href="#grafikon-koltseg" onclick="navigalj('tab-koltseg')">
+          <a class="kartya" onclick="navigalj('tab-koltseg')">
             <div class="kartya-cim">🏦 DAM valódi</div>
             <div class="kartya-ertek">{dam_ar_1nap:.2f} EUR/MWh</div>
             <div class="kartya-trend" style="color:{trend_dam_szin};">{trend_dam} vs 30 napos</div>
           </a>
 
-          <a class="kartya" href="#grafikon-koltseg" onclick="navigalj('tab-koltseg')">
+          <a class="kartya" onclick="navigalj('tab-koltseg')">
             <div class="kartya-cim">🏦 DAM 30 napos</div>
             <div class="kartya-ertek">{dam_atlag_30:.2f} EUR/MWh</div>
             <div class="kartya-sub">30 napos átlag</div>
           </a>
 
-          <a class="kartya" href="#grafikon-koltseg" onclick="navigalj('tab-koltseg')">
+          <a class="kartya" onclick="navigalj('tab-koltseg')">
             <div class="kartya-cim">💱 EUR/HUF</div>
             <div class="kartya-ertek">{eur_huf:.1f} Ft</div>
             <div class="kartya-trend" style="color:{trend_huf_szin};">{trend_huf} vs 395 alap</div>
           </a>
 
-          <a class="kartya" href="#grafikon-fogyasztas" onclick="navigalj('tab-fogyasztas')"
+          <a class="kartya" onclick="navigalj('tab-fogyasztas')"
              style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};
                     box-shadow:0 2px 12px rgba({'255,102,0' if riado_napok else '0,102,204'},0.2);">
             <div class="kartya-cim">{riado_ikon} Riasztás</div>
@@ -520,7 +547,6 @@ with tab1:
 
         <script>
         function navigalj(tabId) {{
-            // Megkeresi a tab gombokat és rákattint a megfelelőre
             setTimeout(function() {{
                 var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
                 var celTab = null;
