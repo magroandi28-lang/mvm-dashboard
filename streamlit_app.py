@@ -9,7 +9,6 @@ import holidays
 import requests
 import os
 import json
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from io import StringIO
 from entsoe import EntsoePandasClient
@@ -179,89 +178,156 @@ def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30):
                            "modell": modell, "riado": josolt >= RIADOKUSZOB})
     return eredmenyek
 
-# ── CHART FÜGGVÉNYEK natív Plotly go-val (animált!) ──────────────
+# ── CHART SEGÉDFÜGGVÉNY ───────────────────────────────────────────
+def plotly_chart(adatok_json, layout_json, chart_id, height=420):
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://cdn.plot.ly/plotly-2.26.0.min.js" charset="utf-8"></script>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{ background:#0a1628; overflow:hidden; }}
+#{chart_id} {{ width:100%; height:{height}px; opacity:0; transition: opacity 0.3s ease; }}
+</style>
+</head>
+<body>
+<div id="{chart_id}"></div>
+<script>
+(function() {{
+    var finalData = {adatok_json};
+    var layout = {layout_json};
+    var config = {{responsive: true, displayModeBar: false}};
+
+    // Nullázott kezdőadatok az animációhoz
+    var startData = finalData.map(function(trace) {{
+        var t = JSON.parse(JSON.stringify(trace));
+        if (t.y) t.y = t.y.map(function() {{ return 0; }});
+        if (t.marker && t.marker.opacity !== undefined) t.marker.opacity = 0;
+        return t;
+    }});
+
+    // Először nullával rajzoljuk ki
+    Plotly.newPlot('{chart_id}', startData, layout, config).then(function() {{
+        // Láthatóvá tesszük
+        document.getElementById('{chart_id}').style.opacity = '1';
+
+        // Kis késleltetés után beanimálódnak a valódi értékek
+        setTimeout(function() {{
+            Plotly.react('{chart_id}', finalData, layout, config);
+        }}, 150);
+    }});
+}})();
+</script>
+</body>
+</html>"""
+
+# ── CHART FÜGGVÉNYEK ─────────────────────────────────────────────
 def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=420):
+    # FIX: "#ffffff" hexkód a "white" helyett
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
     feliratok = [f"{v:,.0f} ({m})".replace(",", " ") for v, m in zip(fogyasztasok, modellek)]
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=datumok, y=fogyasztasok,
-        marker_color=colors, marker_opacity=0.9,
-        text=feliratok, textposition="outside",
-        textfont=dict(color="#ffffff", size=11),
-        hovertemplate="%{x}<br>%{text}<extra></extra>",
-        name="Fogyasztás"
-    ))
-    fig.add_hline(y=RIADOKUSZOB, line_dash="dash", line_color="#FF6600", line_width=2,
-                  annotation_text="Riasztási küszöb (6 812 MWh)",
-                  annotation_font_color="#FF6600", annotation_font_size=10)
-    fig.update_layout(
-        paper_bgcolor="#0a1628", plot_bgcolor="#0f2040",
-        font=dict(color="#cbd5e1", family="Inter"),
-        title=dict(text="7 napos fogyasztás előrejelzés (MWh)", font=dict(size=14, color="#f1f5f9")),
-        margin=dict(l=60, r=20, t=50, b=50),
-        xaxis=dict(gridcolor="#1e3a5f", tickformat="%m.%d", color="#cbd5e1"),
-        yaxis=dict(gridcolor="#1e3a5f", title="MWh", color="#cbd5e1"),
-        bargap=0.55, showlegend=False, height=height,
-        transition=dict(duration=800, easing="cubic-in-out")
-    )
-    return fig
+    
+    adatok = json.dumps([{
+        "type": "bar",
+        "x": datumok,
+        "y": fogyasztasok,
+        "marker": {"color": colors, "opacity": 0.9},
+        "text": feliratok,
+        "textposition": "outside",
+        "textfont": {"color": "#ffffff", "size": 11},
+        "hovertemplate": "%{x}<br>%{text}<extra></extra>",
+        "name": "Fogyasztás"
+    }])
+    
+    layout = json.dumps({
+        "paper_bgcolor": "#0a1628",
+        "plot_bgcolor": "#0f2040",
+        "font": {"color": "#cbd5e1", "family": "Inter"},
+        "title": {"text": "7 napos fogyasztás előrejelzés (MWh)",
+                  "font": {"size": 14, "color": "#f1f5f9"}},
+        "margin": {"l": 60, "r": 20, "t": 50, "b": 50},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "MWh", "color": "#cbd5e1"},
+        "bargap": 0.55,
+        "showlegend": False,
+        "shapes": [{"type": "line", "x0": datumok[0], "x1": datumok[-1],
+                    "y0": RIADOKUSZOB, "y1": RIADOKUSZOB,
+                    "line": {"color": "#FF6600", "width": 2, "dash": "dash"}}],
+        "annotations": [{"x": datumok[3], "y": RIADOKUSZOB,
+                         "text": "Riasztási küszöb (6 812 MWh)",
+                         "showarrow": False, "font": {"color": "#FF6600", "size": 10},
+                         "yanchor": "bottom"}]
+    })
+    return plotly_chart(adatok, layout, "fogyasztas", height)
 
 def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=datumok, y=koltsegek,
-        mode="lines+markers+text",
-        line=dict(color="#FF6600", width=3),
-        marker=dict(size=10, color="#FF6600", line=dict(color="#ffffff", width=2)),
-        fill="tozeroy", fillcolor="rgba(255,102,0,0.15)",
-        text=[f"{v:.1f}" for v in koltsegek], textposition="top center",
-        textfont=dict(color="#ffffff", size=10),
-        hovertemplate="%{x}<br>%{y:.1f} M Ft<extra></extra>",
-        name="Költség"
-    ))
-    fig.update_layout(
-        paper_bgcolor="#0a1628", plot_bgcolor="#0f2040",
-        font=dict(color="#cbd5e1", family="Inter"),
-        title=dict(text=f"Becsült napi energiaköltség (M Ft) | EUR/HUF: {eur_huf:.1f}",
-                   font=dict(size=14, color="#f1f5f9")),
-        margin=dict(l=60, r=20, t=50, b=50),
-        xaxis=dict(gridcolor="#1e3a5f", tickformat="%m.%d", color="#cbd5e1"),
-        yaxis=dict(gridcolor="#1e3a5f", title="Millió Ft", color="#cbd5e1",
-                   range=[min(koltsegek)*0.95, max(koltsegek)*1.08]),
-        showlegend=False, height=height,
-        transition=dict(duration=800, easing="cubic-in-out")
-    )
-    return fig
+    adatok = json.dumps([{
+        "type": "scatter",
+        "x": datumok,
+        "y": koltsegek,
+        "mode": "lines+markers+text",
+        "line": {"color": "#FF6600", "width": 3},
+        "marker": {"size": 10, "color": "#FF6600", "line": {"color": "#ffffff", "width": 2}},
+        "fill": "tozeroy",
+        "fillcolor": "rgba(255,102,0,0.15)",
+        "text": [f"{v:.1f}" for v in koltsegek],
+        "textposition": "top center",
+        "textfont": {"color": "#ffffff", "size": 10},
+        "hovertemplate": "%{x}<br>%{y:.1f} M Ft<extra></extra>",
+        "name": "Költség"
+    }])
+    
+    layout = json.dumps({
+        "paper_bgcolor": "#0a1628",
+        "plot_bgcolor": "#0f2040",
+        "font": {"color": "#cbd5e1", "family": "Inter"},
+        "title": {"text": f"Becsült napi energiaköltség (M Ft) | EUR/HUF: {eur_huf:.1f}",
+                  "font": {"size": 14, "color": "#f1f5f9"}},
+        "margin": {"l": 60, "r": 20, "t": 50, "b": 50},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "Millió Ft", "color": "#cbd5e1",
+                  "range": [min(koltsegek)*0.95, max(koltsegek)*1.08]},
+        "showlegend": False
+    })
+    return plotly_chart(adatok, layout, "koltseg", height)
 
 def homerseklet_chart(datumok, homersekletek, height=420):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=datumok, y=homersekletek,
-        mode="lines+markers+text",
-        line=dict(color="#10b981", width=3),
-        marker=dict(size=10, color="#10b981", line=dict(color="#ffffff", width=2)),
-        fill="tozeroy", fillcolor="rgba(16,185,129,0.15)",
-        text=[f"{v:.1f}°" for v in homersekletek], textposition="top center",
-        textfont=dict(color="#ffffff", size=10),
-        hovertemplate="%{x}<br>%{y:.1f}°C<extra></extra>",
-        name="Hőmérséklet"
-    ))
-    fig.add_hline(y=-5, line_dash="dot", line_color="#FF6600", line_width=1.5,
-                  annotation_text="Extrém hideg (-5°C)",
-                  annotation_font_color="#FF6600", annotation_font_size=10)
-    fig.update_layout(
-        paper_bgcolor="#0a1628", plot_bgcolor="#0f2040",
-        font=dict(color="#cbd5e1", family="Inter"),
-        title=dict(text="Hőmérséklet előrejelzés (°C)", font=dict(size=14, color="#f1f5f9")),
-        margin=dict(l=60, r=20, t=50, b=50),
-        xaxis=dict(gridcolor="#1e3a5f", tickformat="%m.%d", color="#cbd5e1"),
-        yaxis=dict(gridcolor="#1e3a5f", title="°C", color="#cbd5e1"),
-        showlegend=False, height=height,
-        transition=dict(duration=800, easing="cubic-in-out")
-    )
-    return fig
+    adatok = json.dumps([{
+        "type": "scatter",
+        "x": datumok,
+        "y": homersekletek,
+        "mode": "lines+markers+text",
+        "line": {"color": "#10b981", "width": 3},
+        "marker": {"size": 10, "color": "#10b981", "line": {"color": "#ffffff", "width": 2}},
+        "fill": "tozeroy",
+        "fillcolor": "rgba(16,185,129,0.15)",
+        "text": [f"{v:.1f}°" for v in homersekletek],
+        "textposition": "top center",
+        "textfont": {"color": "#ffffff", "size": 10},
+        "hovertemplate": "%{x}<br>%{y:.1f}°C<extra></extra>",
+        "name": "Hőmérséklet"
+    }])
+    
+    layout = json.dumps({
+        "paper_bgcolor": "#0a1628",
+        "plot_bgcolor": "#0f2040",
+        "font": {"color": "#cbd5e1", "family": "Inter"},
+        "title": {"text": "Hőmérséklet előrejelzés (°C)",
+                  "font": {"size": 14, "color": "#f1f5f9"}},
+        "margin": {"l": 60, "r": 20, "t": 50, "b": 50},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1"},
+        "showlegend": False,
+        "shapes": [{"type": "line", "x0": datumok[0], "x1": datumok[-1],
+                    "y0": -5, "y1": -5,
+                    "line": {"color": "#FF6600", "width": 1.5, "dash": "dot"}}],
+        "annotations": [{"x": datumok[-1], "y": -5,
+                         "text": "Extrém hideg (-5°C)",
+                         "showarrow": False, "font": {"color": "#FF6600", "size": 10},
+                         "yanchor": "top", "xanchor": "right"}]
+    })
+    return plotly_chart(adatok, layout, "homerseklet", height)
 
 # ── FEJLÉC ────────────────────────────────────────────────────
 st.markdown("""
@@ -479,22 +545,34 @@ with tab1:
             "📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet", "📈 Összes grafikon"])
 
         with gt1:
-            st.plotly_chart(fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf), use_container_width=True)
+            components.html(
+                fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf),
+                height=440, scrolling=False)
 
         with gt2:
-            st.plotly_chart(koltseg_chart(datumok, koltsegek, eur_huf), use_container_width=True)
+            components.html(
+                koltseg_chart(datumok, koltsegek, eur_huf),
+                height=440, scrolling=False)
 
         with gt3:
-            st.plotly_chart(homerseklet_chart(datumok, homersekletek), use_container_width=True)
+            components.html(
+                homerseklet_chart(datumok, homersekletek),
+                height=440, scrolling=False)
 
         with gt4:
             c1, c2, c3 = st.columns(3)
             with c1:
-                st.plotly_chart(fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf, height=300), use_container_width=True)
+                components.html(
+                    fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf, height=300),
+                    height=320, scrolling=False)
             with c2:
-                st.plotly_chart(koltseg_chart(datumok, koltsegek, eur_huf, height=300), use_container_width=True)
+                components.html(
+                    koltseg_chart(datumok, koltsegek, eur_huf, height=300),
+                    height=320, scrolling=False)
             with c3:
-                st.plotly_chart(homerseklet_chart(datumok, homersekletek, height=300), use_container_width=True)
+                components.html(
+                    homerseklet_chart(datumok, homersekletek, height=300),
+                    height=320, scrolling=False)
     else:
         st.info("Kattints az Előrejelzés frissítése gombra!")
 
