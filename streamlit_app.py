@@ -48,7 +48,7 @@ footer { display: none !important; }
 #MainMenu { display: none !important; }
 header { display: none !important; }
 
-/* ── KÁRTYA STÍLUSOK (CSS GRID, fix 8 oszlop, nincs JS, nincs link) ── */
+/* ── KÁRTYA STÍLUSOK (CSS GRID, fix 8 oszlop, hover effekttel) ── */
 .kartya-sor {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
@@ -67,6 +67,13 @@ header { display: none !important; }
     display: flex;
     flex-direction: column;
     justify-content: center;
+    cursor: default;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+.kartya:hover {
+    border-color: #0066CC;
+    box-shadow: 0 4px 24px rgba(0,102,204,0.45), 0 0 0 1px rgba(0,102,204,0.3);
+    transform: translateY(-3px);
 }
 .kartya-cim {
     color: #64748b; font-size: 8px; font-family: Inter,sans-serif;
@@ -78,7 +85,13 @@ header { display: none !important; }
     font-family: Montserrat,sans-serif; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
 }
-.kartya-trend { font-size: 11px; margin-top: 3px; white-space: nowrap; }
+.kartya-trend {
+    font-size: 11px; margin-top: 3px; white-space: nowrap;
+    cursor: help;
+    border-bottom: 1px dotted transparent;
+    transition: border-color 0.2s;
+}
+.kartya-trend:hover { border-bottom-color: currentColor; }
 .kartya-sub { color: #94a3b8; font-size: 10px; margin-top: 3px; white-space: nowrap; }
 
 /* Mobile responsive: kisebb képernyőn 4-2 oszlop */
@@ -515,7 +528,7 @@ with tab1:
         allapot_ph = st.empty()
 
     if frissit:
-        st.session_state.frissites_ideje = magyar_ma().strftime('%Y-%m-%d') + " " + datetime.now().strftime('%H:%M:%S')
+        st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
         get_eur_huf.clear()
         get_idojaras.clear()
         get_dam_ar.clear()
@@ -536,43 +549,11 @@ with tab1:
             st.session_state.dam_ar_1nap = dam_ar_1nap
             st.session_state.dam_atlag_30 = dam_atlag_30
             st.session_state.dam_valodi = dam_valodi
-            st.session_state.frissites_ideje = magyar_ma().strftime('%Y-%m-%d') + " " + datetime.now().strftime('%H:%M:%S')
+            st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
 
     if "frissites_ideje" in st.session_state:
-        # Frissítve idő + ÉLŐ ÓRA (JS, másodpercenként frissül)
-        elo_ora_html = f"""
-        <div style="background:#0a3a1a; border:1px solid #10b981; border-radius:8px;
-                    padding:8px 16px; display:flex; gap:24px; align-items:center;
-                    flex-wrap:wrap;">
-            <span style="color:#10b981; font-weight:600;">
-                ✅ Utoljára frissítve: {st.session_state.frissites_ideje}
-            </span>
-            <span style="color:#cbd5e1;">
-                🕐 Jelen idő: <span id="elo_ora" style="color:#10b981; font-weight:700;">--:--:--</span>
-            </span>
-        </div>
-        <script>
-        (function() {{
-            function frissitOra() {{
-                var most = new Date();
-                var ora = String(most.getHours()).padStart(2, '0');
-                var perc = String(most.getMinutes()).padStart(2, '0');
-                var mp = String(most.getSeconds()).padStart(2, '0');
-                var ev = most.getFullYear();
-                var ho = String(most.getMonth() + 1).padStart(2, '0');
-                var nap = String(most.getDate()).padStart(2, '0');
-                var oraDiv = window.parent.document.getElementById('elo_ora');
-                if (oraDiv) oraDiv.textContent = ev + '-' + ho + '-' + nap + ' ' + ora + ':' + perc + ':' + mp;
-            }}
-            frissitOra();
-            if (!window.parent._elo_ora_timer) {{
-                window.parent._elo_ora_timer = setInterval(frissitOra, 1000);
-            }}
-        }})();
-        </script>
-        """
-        with allapot_ph.container():
-            components.html(elo_ora_html, height=55)
+        # FIX: Csak utolsó frissítés időpont, garantáltan magyar idő szerint
+        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje} (magyar idő)")
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
@@ -628,21 +609,29 @@ with tab1:
         riado_szin = "#FF6600" if riado_napok else "#10b981"
         riado_ikon = "🚨" if riado_napok else "✅"
 
-        # ── KÁRTYÁK (FIX: <div>-ekre cserélve, nincs onclick, nincs script
-        # → nem lehet szellem elem, biztonságos render) ──
+        # Trend tooltipek számítása (egérrel ráhúzva mutatja a magyarázatot)
+        fog_valt = ((utolso3_fog - elso3_fog) / elso3_fog) * 100
+        kolt_valt = ((utolso3_kolt - elso3_kolt) / elso3_kolt) * 100
+        dam_valt = ((dam_ar_1nap - dam_atlag_30) / dam_atlag_30) * 100
+
+        tooltip_fog = f"Heti fogyasztás trend: első 3 nap átlaga ({elso3_fog:,.0f} MWh) vs utolsó 3 nap átlaga ({utolso3_fog:,.0f} MWh), változás: {fog_valt:+.1f}%"
+        tooltip_kolt = f"Heti költség trend: első 3 nap átlaga ({elso3_kolt:.1f} M Ft) vs utolsó 3 nap átlaga ({utolso3_kolt:.1f} M Ft), változás: {kolt_valt:+.1f}%"
+        tooltip_dam = f"DAM ár vs 30 napos átlag: holnapi ({dam_ar_1nap:.2f}) vs 30 napos ({dam_atlag_30:.2f} EUR/MWh), változás: {dam_valt:+.1f}%"
+
+        # ── KÁRTYÁK (FIX: <div>-ek, hover effekt, trend tooltipek) ──
         st.markdown(f"""
         <div class="kartya-sor">
 
           <div class="kartya">
             <div class="kartya-cim">⚡ Heti fogyasztás</div>
             <div class="kartya-ertek">{heti_fogyasztas:,.0f} MWh</div>
-            <div class="kartya-trend" style="color:{trend_fog_szin};">{trend_fog} heti trend</div>
+            <div class="kartya-trend" style="color:{trend_fog_szin};" title="{tooltip_fog}">{trend_fog} heti trend</div>
           </div>
 
           <div class="kartya">
             <div class="kartya-cim">💰 Heti költség</div>
             <div class="kartya-ertek">{heti_koltseg:.1f} M Ft</div>
-            <div class="kartya-trend" style="color:{trend_koltseg_szin};">{trend_koltseg} heti trend</div>
+            <div class="kartya-trend" style="color:{trend_koltseg_szin};" title="{tooltip_kolt}">{trend_koltseg} heti trend</div>
           </div>
 
           <div class="kartya">
@@ -660,7 +649,7 @@ with tab1:
           <div class="kartya">
             <div class="kartya-cim">🏦 DAM valódi</div>
             <div class="kartya-ertek">{dam_ar_1nap:.2f} EUR/MWh</div>
-            <div class="kartya-trend" style="color:{trend_dam_szin};">{trend_dam} vs 30 napos</div>
+            <div class="kartya-trend" style="color:{trend_dam_szin};" title="{tooltip_dam}">{trend_dam} vs 30 napos</div>
           </div>
 
           <div class="kartya">
