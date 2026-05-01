@@ -94,7 +94,7 @@ header { display: none !important; }
 .kartya-trend:hover { border-bottom-color: currentColor; }
 .kartya-sub { color: #94a3b8; font-size: 10px; margin-top: 3px; white-space: nowrap; }
 
-/* Mobile responsive: kisebb képernyőn 4-2 oszlop */
+
 @media (max-width: 1200px) {
     .kartya-sor { grid-template-columns: repeat(4, 1fr); }
 }
