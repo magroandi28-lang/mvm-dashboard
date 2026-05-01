@@ -48,22 +48,25 @@ footer { display: none !important; }
 #MainMenu { display: none !important; }
 header { display: none !important; }
 
-/* ── KÁRTYA STÍLUSOK (FIX: globálba kiemelve, így nem törik f-stringben) ── */
+/* ── KÁRTYA STÍLUSOK (CSS GRID, fix 8 oszlop, nincs JS, nincs link) ── */
 .kartya-sor {
-    display: flex; gap: 8px; margin-bottom: 16px;
-    flex-wrap: nowrap; overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+    width: 100%;
 }
 .kartya {
-    flex: 1; min-width: 110px; max-width: 200px;
-    background: #0a1628; border: 1px solid #1e3a5f; border-radius: 12px;
-    padding: 10px 8px; text-align: center;
+    background: #0a1628;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
     box-shadow: 0 2px 12px rgba(0,102,204,0.15);
-    cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
-    text-decoration: none; display: block;
-}
-.kartya:hover {
-    border-color: #0066CC; box-shadow: 0 4px 20px rgba(0,102,204,0.35);
-    transform: translateY(-2px);
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 .kartya-cim {
     color: #64748b; font-size: 8px; font-family: Inter,sans-serif;
@@ -73,9 +76,18 @@ header { display: none !important; }
 .kartya-ertek {
     color: #FF6600; font-size: 14px; font-weight: 700;
     font-family: Montserrat,sans-serif; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
 }
 .kartya-trend { font-size: 11px; margin-top: 3px; white-space: nowrap; }
 .kartya-sub { color: #94a3b8; font-size: 10px; margin-top: 3px; white-space: nowrap; }
+
+/* Mobile responsive: kisebb képernyőn 4-2 oszlop */
+@media (max-width: 1200px) {
+    .kartya-sor { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 640px) {
+    .kartya-sor { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -213,7 +225,7 @@ def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30):
                            "modell": modell, "riado": josolt >= RIADOKUSZOB})
     return eredmenyek
 
-# ── CHART SEGÉDFÜGGVÉNY (FIX: natív Plotly animáció + IntersectionObserver) ──
+# ── CHART SEGÉDFÜGGVÉNY (látványos animáció: 2.5sec, 500ms delay, fade-in) ──
 def plotly_chart(adatok_json, layout_json, chart_id, height=420):
     return f"""<!DOCTYPE html>
 <html>
@@ -223,7 +235,12 @@ def plotly_chart(adatok_json, layout_json, chart_id, height=420):
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ background:#0a1628; overflow:hidden; }}
-#{chart_id} {{ width:100%; height:{height}px; }}
+#{chart_id} {{
+    width:100%; height:{height}px;
+    opacity: 0;
+    transition: opacity 0.6s ease-out;
+}}
+#{chart_id}.fade-in {{ opacity: 1; }}
 </style>
 </head>
 <body>
@@ -236,54 +253,88 @@ body {{ background:#0a1628; overflow:hidden; }}
     var chartEl = document.getElementById('{chart_id}');
     var animated = false;
 
-    // Nullázott kezdőadatok
+    // ── BEÁLLÍTÁSOK ──
+    var START_DELAY = 500;       // 500ms várakozás indítás előtt
+    var ANIM_DURATION = 2500;    // 2.5 másodperc animáció
+    var FRAME_RATE = 60;         // 60 fps
+    var TOTAL_STEPS = Math.round(ANIM_DURATION * FRAME_RATE / 1000);  // ~150 lépés
+    var FRAME_INTERVAL = 1000 / FRAME_RATE;  // ~16.67ms
+
+    // Nullázott kezdőadatok (minden Y érték = 0)
     function makeStartData() {{
         return finalData.map(function(trace) {{
             var t = JSON.parse(JSON.stringify(trace));
             if (t.y) t.y = t.y.map(function() {{ return 0; }});
+            // A szövegfeliratokat is rejtjük el animáció közben
+            if (t.text) {{
+                t._origText = t.text;
+                t.text = t.text.map(function() {{ return ''; }});
+            }}
             return t;
         }});
     }}
 
-    // Animáció lépésenként (60fps, ~1000ms)
+    // ── EASING FÜGGVÉNY: easeOutBack (kicsi túllendülés a végén) ──
+    function easeOutBack(t) {{
+        var c1 = 1.70158;
+        var c3 = c1 + 1;
+        return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    }}
+
+    // ── easeOutCubic (smooth, no overshoot) — bar charthoz biztonságosabb ──
+    function easeOutCubic(t) {{
+        return 1 - Math.pow(1 - t, 3);
+    }}
+
+    // Animáció lépésenként
     function runAnimation() {{
         if (animated) return;
         animated = true;
-        var steps = 30;
+
+        // Fade in a chart (opacity 0 → 1)
+        chartEl.classList.add('fade-in');
+
         var current = 0;
         var timer = setInterval(function() {{
             current++;
-            // easeOutCubic easing
-            var t = current / steps;
-            var eased = 1 - Math.pow(1 - t, 3);
+            var t = current / TOTAL_STEPS;
+            var eased = easeOutCubic(t);
+
             var animData = finalData.map(function(trace) {{
                 var copy = JSON.parse(JSON.stringify(trace));
                 if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
+                // A felirat csak akkor jelenjen meg, amikor majdnem kész (90%+)
+                if (copy.text && t < 0.9) {{
+                    copy.text = copy.text.map(function() {{ return ''; }});
+                }}
                 return copy;
             }});
+
             Plotly.react('{chart_id}', animData, layout, config);
-            if (current >= steps) {{
+
+            if (current >= TOTAL_STEPS) {{
                 clearInterval(timer);
+                // Végállapot: pontosan az eredeti adatok
                 Plotly.react('{chart_id}', finalData, layout, config);
             }}
-        }}, 33);
+        }}, FRAME_INTERVAL);
     }}
 
-    // Indítás: először nullával plot, majd IntersectionObserver-rel triggerelt animáció
+    // ── INDÍTÁS ──
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
-        // Ha az elem látható, indítsd az animációt
         if ('IntersectionObserver' in window) {{
             var observer = new IntersectionObserver(function(entries) {{
                 entries.forEach(function(entry) {{
                     if (entry.isIntersecting && !animated) {{
-                        setTimeout(runAnimation, 150);
+                        // 500ms delay, hogy a felhasználó észrevegye az indulást
+                        setTimeout(runAnimation, START_DELAY);
                     }}
                 }});
             }}, {{threshold: 0.1}});
             observer.observe(chartEl);
         }} else {{
             // Fallback régi böngészőkre
-            setTimeout(runAnimation, 300);
+            setTimeout(runAnimation, START_DELAY);
         }}
     }});
 }})();
@@ -296,9 +347,9 @@ def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=42
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
     feliratok = [f"{v:,.0f} ({m})".replace(",", " ") for v, m in zip(fogyasztasok, modellek)]
 
-    # FIX: x range padding mindkét oldalon, hogy a feliratok ne lógjanak ki
-    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=12)).isoformat()
-    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=12)).isoformat()
+    # FIX: 18 órás padding mindkét oldalon (konzisztens a többi chartal)
+    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
+    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
 
     adatok = json.dumps([{
         "type": "bar",
@@ -319,7 +370,8 @@ def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=42
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": "7 napos fogyasztás előrejelzés (MWh)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        "margin": {"l": 80, "r": 30, "t": 60, "b": 50},
+        # FIX: konzisztens margin a többi chartal
+        "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "MWh", "color": "#cbd5e1",
@@ -339,9 +391,9 @@ def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=42
     return plotly_chart(adatok, layout, "fogyasztas", height)
 
 def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
-    # FIX: x range padding mindkét oldalon
-    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=12)).isoformat()
-    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=12)).isoformat()
+    # FIX: 18 órás padding mindkét oldalon (volt 12)
+    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
+    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
 
     adatok = json.dumps([{
         "type": "scatter",
@@ -353,7 +405,8 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
         "fill": "tozeroy",
         "fillcolor": "rgba(255,102,0,0.15)",
         "text": [f"{v:.1f}" for v in koltsegek],
-        "textposition": ["top right"] + ["top center"] * (len(koltsegek) - 2) + ["top left"],
+        # FIX: minden pont top center (egységes), a margin és range gondoskodik a helyről
+        "textposition": "top center",
         "textfont": {"color": "#ffffff", "size": 10},
         "hovertemplate": "%{x}<br>%{y:.1f} M Ft<extra></extra>",
         "name": "Költség",
@@ -369,7 +422,8 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": f"Becsült napi energiaköltség (M Ft) | EUR/HUF: {eur_huf:.1f}",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        "margin": {"l": 80, "r": 30, "t": 60, "b": 50},
+        # FIX: bal/jobb margin szélesítve 80/30 → 100/80 (felirat befér)
+        "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "Millió Ft", "color": "#cbd5e1",
@@ -379,8 +433,9 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
     return plotly_chart(adatok, layout, "koltseg", height)
 
 def homerseklet_chart(datumok, homersekletek, height=420):
-    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=12)).isoformat()
-    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=12)).isoformat()
+    # FIX: 18 órás padding mindkét oldalon
+    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
+    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
 
     adatok = json.dumps([{
         "type": "scatter",
@@ -392,8 +447,8 @@ def homerseklet_chart(datumok, homersekletek, height=420):
         "fill": "tozeroy",
         "fillcolor": "rgba(16,185,129,0.15)",
         "text": [f"{v:.1f}°" for v in homersekletek],
-        # FIX: első és utolsó pont feliratát eltoljuk, hogy ne lógjon ki
-        "textposition": ["top right"] + ["top center"] * (len(homersekletek) - 2) + ["top left"],
+        # FIX: minden pont top center, margin és range padding gondoskodik a helyről
+        "textposition": "top center",
         "textfont": {"color": "#ffffff", "size": 10},
         "hovertemplate": "%{x}<br>%{y:.1f}°C<extra></extra>",
         "name": "Hőmérséklet",
@@ -406,7 +461,8 @@ def homerseklet_chart(datumok, homersekletek, height=420):
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": "Hőmérséklet előrejelzés (°C)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        "margin": {"l": 80, "r": 30, "t": 60, "b": 50},
+        # FIX: bal/jobb margin szélesítve 80/30 → 100/80
+        "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1",
@@ -483,7 +539,40 @@ with tab1:
             st.session_state.frissites_ideje = magyar_ma().strftime('%Y-%m-%d') + " " + datetime.now().strftime('%H:%M:%S')
 
     if "frissites_ideje" in st.session_state:
-        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
+        # Frissítve idő + ÉLŐ ÓRA (JS, másodpercenként frissül)
+        elo_ora_html = f"""
+        <div style="background:#0a3a1a; border:1px solid #10b981; border-radius:8px;
+                    padding:8px 16px; display:flex; gap:24px; align-items:center;
+                    flex-wrap:wrap;">
+            <span style="color:#10b981; font-weight:600;">
+                ✅ Utoljára frissítve: {st.session_state.frissites_ideje}
+            </span>
+            <span style="color:#cbd5e1;">
+                🕐 Jelen idő: <span id="elo_ora" style="color:#10b981; font-weight:700;">--:--:--</span>
+            </span>
+        </div>
+        <script>
+        (function() {{
+            function frissitOra() {{
+                var most = new Date();
+                var ora = String(most.getHours()).padStart(2, '0');
+                var perc = String(most.getMinutes()).padStart(2, '0');
+                var mp = String(most.getSeconds()).padStart(2, '0');
+                var ev = most.getFullYear();
+                var ho = String(most.getMonth() + 1).padStart(2, '0');
+                var nap = String(most.getDate()).padStart(2, '0');
+                var oraDiv = window.parent.document.getElementById('elo_ora');
+                if (oraDiv) oraDiv.textContent = ev + '-' + ho + '-' + nap + ' ' + ora + ':' + perc + ':' + mp;
+            }}
+            frissitOra();
+            if (!window.parent._elo_ora_timer) {{
+                window.parent._elo_ora_timer = setInterval(frissitOra, 1000);
+            }}
+        }})();
+        </script>
+        """
+        with allapot_ph.container():
+            components.html(elo_ora_html, height=55)
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
@@ -539,84 +628,64 @@ with tab1:
         riado_szin = "#FF6600" if riado_napok else "#10b981"
         riado_ikon = "🚨" if riado_napok else "✅"
 
-        # ── KÁRTYÁK (FIX: csak HTML, nincs benne style/script blokk) ──
+        # ── KÁRTYÁK (FIX: <div>-ekre cserélve, nincs onclick, nincs script
+        # → nem lehet szellem elem, biztonságos render) ──
         st.markdown(f"""
         <div class="kartya-sor">
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-fogyasztas')">
+          <div class="kartya">
             <div class="kartya-cim">⚡ Heti fogyasztás</div>
             <div class="kartya-ertek">{heti_fogyasztas:,.0f} MWh</div>
             <div class="kartya-trend" style="color:{trend_fog_szin};">{trend_fog} heti trend</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-koltseg')">
+          <div class="kartya">
             <div class="kartya-cim">💰 Heti költség</div>
             <div class="kartya-ertek">{heti_koltseg:.1f} M Ft</div>
             <div class="kartya-trend" style="color:{trend_koltseg_szin};">{trend_koltseg} heti trend</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-fogyasztas')">
+          <div class="kartya">
             <div class="kartya-cim">📈 Csúcs</div>
             <div class="kartya-ertek">{max_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{max_nap['datum'].strftime('%m.%d')}</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-fogyasztas')">
+          <div class="kartya">
             <div class="kartya-cim">📉 Minimum</div>
             <div class="kartya-ertek">{min_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{min_nap['datum'].strftime('%m.%d')}</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-koltseg')">
+          <div class="kartya">
             <div class="kartya-cim">🏦 DAM valódi</div>
             <div class="kartya-ertek">{dam_ar_1nap:.2f} EUR/MWh</div>
             <div class="kartya-trend" style="color:{trend_dam_szin};">{trend_dam} vs 30 napos</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-koltseg')">
+          <div class="kartya">
             <div class="kartya-cim">🏦 DAM 30 napos</div>
             <div class="kartya-ertek">{dam_atlag_30:.2f} EUR/MWh</div>
             <div class="kartya-sub">30 napos átlag</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-koltseg')">
+          <div class="kartya">
             <div class="kartya-cim">💱 EUR/HUF</div>
             <div class="kartya-ertek">{eur_huf:.1f} Ft</div>
             <div class="kartya-sub">MNB középárfolyam</div>
-          </a>
+          </div>
 
-          <a class="kartya" href="javascript:void(0)" onclick="navigalj('tab-fogyasztas')"
-             style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};
-                    box-shadow:0 2px 12px rgba({'255,102,0' if riado_napok else '0,102,204'},0.2);">
+          <div class="kartya" style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};">
             <div class="kartya-cim">{riado_ikon} Riasztás</div>
             <div class="kartya-ertek" style="color:{riado_szin};">{riado_ertek}</div>
             <div class="kartya-sub">küszöb: 6 812 MWh</div>
-          </a>
+          </div>
 
         </div>
         """, unsafe_allow_html=True)
 
-        # ── TAB NAVIGÁCIÓ JS (FIX: külön blokk, nem keveredik a kártyákkal) ──
-        st.markdown("""
-        <script>
-        function navigalj(tabId) {
-            setTimeout(function() {
-                var tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
-                var celTab = null;
-                tabs.forEach(function(tab) {
-                    var szoveg = tab.textContent.toLowerCase();
-                    if (tabId === 'tab-fogyasztas' && szoveg.includes('fogyaszt')) celTab = tab;
-                    if (tabId === 'tab-koltseg' && szoveg.includes('lts')) celTab = tab;
-                    if (tabId === 'tab-homerseklet' && szoveg.includes('hő')) celTab = tab;
-                });
-                if (celTab) {
-                    celTab.click();
-                    celTab.scrollIntoView({behavior: 'smooth', block: 'start'});
-                }
-            }, 100);
-        }
-        </script>
-        """, unsafe_allow_html=True)
+        # ── (A navigációs script eltávolítva — a kártyák most egyszerű
+        # információs <div>-ek, nincs onclick, így nem kell JS sem) ──
 
         st.markdown("<div id='grafikon-fogyasztas' style='margin-top:12px;'></div>", unsafe_allow_html=True)
 
