@@ -93,14 +93,6 @@ header { display: none !important; }
 }
 .kartya-trend:hover { border-bottom-color: currentColor; }
 .kartya-sub { color: #94a3b8; font-size: 10px; margin-top: 3px; white-space: nowrap; }
-
-
-@media (max-width: 1200px) {
-    .kartya-sor { grid-template-columns: repeat(4, 1fr); }
-}
-@media (max-width: 640px) {
-    .kartya-sor { grid-template-columns: repeat(2, 1fr); }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -553,7 +545,7 @@ with tab1:
 
     if "frissites_ideje" in st.session_state:
         # FIX: Csak utolsó frissítés időpont, garantáltan magyar idő szerint
-        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje} (magyar idő)")
+        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
