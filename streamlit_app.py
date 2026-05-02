@@ -185,7 +185,9 @@ def get_dam_ar(_datum_kulcs=None):
                 end = start + pd.Timedelta(days=1)
                 dam = client.query_day_ahead_prices("HU", start=start, end=end)
                 if dam is not None and len(dam) > 0:
-                    legfrissebb = float(dam.mean())
+                    ertek = float(dam.mean())
+                    if ertek >= 20.0:
+                        legfrissebb = ertek
                     break
             except:
                 continue
