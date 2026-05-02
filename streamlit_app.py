@@ -93,6 +93,14 @@ header { display: none !important; }
 }
 .kartya-trend:hover { border-bottom-color: currentColor; }
 .kartya-sub { color: #94a3b8; font-size: 10px; margin-top: 3px; white-space: nowrap; }
+
+/* Mobile responsive: kisebb képernyőn 4-2 oszlop */
+@media (max-width: 1200px) {
+    .kartya-sor { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 640px) {
+    .kartya-sor { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,8 +193,10 @@ def get_dam_ar(_datum_kulcs=None):
                 end = start + pd.Timedelta(days=1)
                 dam = client.query_day_ahead_prices("HU", start=start, end=end)
                 if dam is not None and len(dam) > 0:
-                    legfrissebb = float(dam.mean())
-                    break
+                    ertek = float(dam.mean())
+                    if ertek >= 20.0:  # validáció: irreálisan alacsony ár kizárása
+                        legfrissebb = ertek
+                        break
             except:
                 continue
         start_30 = pd.Timestamp((ma - timedelta(days=30)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
@@ -545,7 +555,7 @@ with tab1:
 
     if "frissites_ideje" in st.session_state:
         # FIX: Csak utolsó frissítés időpont, garantáltan magyar idő szerint
-        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
+        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje} (magyar idő)")
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
