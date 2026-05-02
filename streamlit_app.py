@@ -185,16 +185,22 @@ def get_dam_ar(_datum_kulcs=None):
                 end = start + pd.Timedelta(days=1)
                 dam = client.query_day_ahead_prices("HU", start=start, end=end)
                 if dam is not None and len(dam) > 0:
-                    ertek = float(dam.mean())
+                    dam_csucside = dam.between_time("08:00", "20:00")
+                    if len(dam_csucside) > 0:
+                        ertek = float(dam_csucside.mean())
+                    else:
+                        ertek = float(dam.mean())
                     if ertek >= 20.0:
                         legfrissebb = ertek
-                    break
+                        break
             except:
                 continue
         start_30 = pd.Timestamp((ma - timedelta(days=30)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
         end_30 = pd.Timestamp(ma.strftime("%Y-%m-%d"), tz="Europe/Budapest")
         dam_30 = client.query_day_ahead_prices("HU", start=start_30, end=end_30)
         atlag_30 = float(dam_30.mean()) if dam_30 is not None and len(dam_30) > 0 else 98.91
+        if legfrissebb == 104.93:
+            legfrissebb = atlag_30
         return legfrissebb, atlag_30, True
     except:
         return 104.93, 98.91, False
