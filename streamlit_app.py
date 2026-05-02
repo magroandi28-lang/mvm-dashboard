@@ -159,15 +159,15 @@ def get_idojaras(datum_kulcs=None):
         params = {"latitude": 47.5, "longitude": 19.0,
                   "daily": "temperature_2m_mean",
                   "timezone": "Europe/Budapest",
-                  "start_date": ma.strftime("%Y-%m-%d"),
-                  "end_date": (ma + timedelta(days=6)).strftime("%Y-%m-%d")}
+                  "start_date": (ma + timedelta(days=1)).strftime("%Y-%m-%d"),
+                  "end_date": (ma + timedelta(days=7)).strftime("%Y-%m-%d")}
         r = requests.get(url, params=params, timeout=10)
         data = r.json()
         return [{"datum": pd.to_datetime(d), "homerseklet": t}
                 for d, t in zip(data["daily"]["time"], data["daily"]["temperature_2m_mean"])]
     except:
         ma = magyar_ma()
-        return [{"datum": pd.to_datetime(ma + timedelta(days=i)), "homerseklet": 12.0}
+        return [{"datum": pd.to_datetime(ma + timedelta(days=i+1)), "homerseklet": 12.0}
                 for i in range(7)]
 
 @st.cache_data(ttl=300)
