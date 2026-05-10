@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diplomamunka Rendszerterv – Varga Andrea</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; color: #222; background: #f8fafc; }
+
+  /* Fejléc */
+  .diplomamunka-fejlec {
+    background: linear-gradient(135deg, #1a3c5e 0%, #2e6da4 60%, #3b0764 100%);
+    color: white; padding: 36px 32px; border-radius: 12px; margin-bottom: 32px;
+  }
+  .diplomamunka-fejlec h1 { margin: 0 0 8px 0; font-size: 26px; font-weight: 700; color: white; }
+  .diplomamunka-fejlec p { margin: 4px 0; opacity: 0.88; font-size: 15px; color: white; }
+  .diplomamunka-fejlec .alcim { font-size: 13px; opacity: 0.7; margin-top: 12px; color: white; font-style: italic; }
+  .projektek-sor { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .projekt-badge { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1.5px solid; }
+  .projekt-badge.ent { background: rgba(107,33,168,0.35); border-color: rgba(216,180,254,0.6); color: #e9d5ff; }
+  .projekt-badge.mvm { background: rgba(12,107,74,0.35); border-color: rgba(104,211,145,0.6); color: #bbf7d0; }
+
+  /* Navigáció */
+  .nav { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+  .nav a { padding: 8px 18px; border-radius: 20px; text-decoration: none; font-size: 13px; font-weight: 600; transition: background 0.2s; }
+  .nav a.ent { background: #6b21a8; color: white; }
+  .nav a.ent:hover { background: #3b0764; }
+  .nav a.mvm { background: #0C6B4A; color: white; }
+  .nav a.mvm:hover { background: #0a5a3e; }
+  .nav a.sec { background: #2e6da4; color: white; }
+  .nav a.sec:hover { background: #1a3c5e; }
+
+  /* Szekciók */
+  h1 { border-bottom: 3px solid; padding-bottom: 10px; margin-top: 40px; font-size: 21px; }
+  h1.ent { color: #3b0764; border-bottom-color: #6b21a8; }
+  h1.mvm { color: #0C6B4A; border-bottom-color: #0C6B4A; }
+  h1.sec { color: #1a3c5e; border-bottom-color: #2e6da4; }
+  h2 { font-size: 17px; padding-left: 12px; margin-top: 28px; border-left: 5px solid; }
+  h2.ent { color: #6b21a8; border-left-color: #6b21a8; }
+  h2.mvm { color: #0C6B4A; border-left-color: #0C6B4A; }
+  h2.sec { color: #2e6da4; border-left-color: #2e6da4; }
+  h3 { font-size: 14px; margin-top: 14px; color: #333; }
+
+  /* Kártyák */
+  .projekt-szekció { background: white; border-radius: 12px; padding: 26px 30px; margin: 24px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-top: 5px solid; }
+  .projekt-szekció.ent { border-top-color: #6b21a8; }
+  .projekt-szekció.mvm { border-top-color: #0C6B4A; }
+  .projekt-szekció.sec { border-top-color: #2e6da4; }
+
+  /* Modulok */
+  .modul { border-radius: 8px; padding: 18px 20px; margin: 14px 0; border: 1px solid; }
+  .modul.ent { background: #faf5ff; border-color: #d8b4fe; }
+  .modul.mvm { background: #f0fff4; border-color: #68d391; }
+  .modul.info { background: #f0f6ff; border-color: #b0cfe8; }
+  .modul.warn { background: #fffbeb; border-color: #f59e0b; }
+  .modul.auth { background: #0f172a; border-color: #334155; border-radius: 10px; }
+
+  /* Táblázatok */
+  .csv-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  .csv-table th { color: white; padding: 9px 12px; text-align: left; }
+  .csv-table.ent th { background: #6b21a8; }
+  .csv-table.ent-dark th { background: #3b0764; }
+  .csv-table.mvm th { background: #0C6B4A; }
+  .csv-table.sec th { background: #1a3c5e; }
+  .csv-table td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+  .csv-table tr:nth-child(even) td { background: #f9f9f9; }
+
+  /* Tech tagek */
+  .tech-tag { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; margin: 2px; }
+  .tech-tag.ent { background: #f3e8ff; color: #6b21a8; }
+  .tech-tag.mvm { background: #dcf4ec; color: #0C6B4A; }
+  .tech-tag.sec { background: #e8f0fe; color: #1a3c5e; }
+
+  /* Eredmény kártyák */
+  .result { background: #fff; border-left: 4px solid; padding: 10px 15px; margin: 7px 0; font-size: 13px; border-radius: 0 4px 4px 0; }
+  .result.ent { border-left-color: #6b21a8; }
+  .result.mvm { border-left-color: #0C6B4A; }
+  .result.sec { border-left-color: #2e6da4; }
+
+  /* Összekötő szekció */
+  .osszekoto { background: linear-gradient(135deg, #3b0764 0%, #0C6B4A 100%); color: white; padding: 24px 28px; border-radius: 10px; margin: 28px 0; }
+  .osszekoto h2 { color: white; border-left-color: rgba(255,255,255,0.4); margin-top: 0; }
+  .osszekoto p { opacity: 0.9; font-size: 14px; }
+
+  /* Linkek */
+  .link-lista { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+  .link-btn { display: inline-block; padding: 9px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600; color: white; }
+  .link-btn.github { background: #24292e; }
+  .link-btn.render { background: #ff6600; }
+  .link-btn.colab { background: #F9AB00; color: #222; }
+  .link-btn.looker { background: #1a73e8; }
+  .link-btn.video { background: #6b21a8; }
+
+  /* Nyíl */
+  .arrow { text-align: center; font-size: 22px; color: #0C6B4A; margin: 8px 0; }
+  .arrow.ent { color: #6b21a8; }
+
+  ul { line-height: 1.85; font-size: 14px; }
+  p { font-size: 14px; }
+  .highlight { background: #fff3cd; padding: 2px 6px; border-radius: 3px; }
+  .check { color: #0C6B4A; font-weight: bold; font-size: 16px; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 8px; vertical-align: middle; }
+  .badge.done { background: #68d391; color: #1a4731; }
+  .badge.uj { background: #fde68a; color: #78350f; }
+
+  /* ══════════════════════════════════
+     N8N WORKFLOW VIZUALIZÁCIÓ
+  ══════════════════════════════════ */
+  .n8n-container { background: #f5f5f5; border-radius: 10px; overflow: hidden; border: 1px solid #ddd; margin: 18px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .n8n-toolbar { background: white; border-bottom: 1px solid #e5e5e5; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .n8n-toolbar .breadcrumb { color: #888; display: flex; align-items: center; gap: 6px; }
+  .n8n-toolbar .wf-name { color: #222; font-weight: 600; }
+  .n8n-toolbar .tabs { margin-left: 20px; display: flex; }
+  .n8n-toolbar .tab { padding: 5px 14px; font-size: 12px; color: #666; border-radius: 4px; border: 1px solid transparent; }
+  .n8n-toolbar .tab.active { background: #f0f0f0; color: #222; font-weight: 600; border-color: #ddd; }
+  .n8n-toolbar .publish-btn { margin-left: auto; background: #ff6d5a; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .n8n-canvas { position: relative; padding: 28px 20px 18px; min-height: 180px; overflow-x: auto; background-image: radial-gradient(circle, #ccc 1px, transparent 1px); background-size: 24px 24px; }
+  .workflow-row { display: flex; align-items: center; gap: 0; margin-bottom: 14px; flex-wrap: nowrap; overflow-x: auto; }
+  .n8n-node { background: white; border: 1.5px solid #e0e0e0; border-radius: 8px; padding: 10px 12px; min-width: 108px; max-width: 128px; text-align: center; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 4px rgba(0,0,0,0.08); flex-shrink: 0; position: relative; }
+  .n8n-node:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.14); border-color: #6b21a8; }
+  .n8n-node.selected { border-color: #6b21a8; box-shadow: 0 0 0 3px rgba(107,33,168,0.15); }
+  .n8n-node .node-icon { font-size: 22px; margin-bottom: 4px; display: block; }
+  .n8n-node .node-name { font-size: 11px; font-weight: 600; color: #222; line-height: 1.3; }
+  .n8n-node .node-sub { font-size: 10px; color: #888; margin-top: 2px; }
+  .n8n-node .dot-l { position: absolute; left: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background: white; border: 2px solid #bbb; border-radius: 50%; }
+  .n8n-node .dot-r { position: absolute; right: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background: white; border: 2px solid #bbb; border-radius: 50%; }
+  .n8n-node.trigger { border-left: 4px solid #ff6d5a; }
+  .n8n-conn { display: flex; align-items: center; flex-shrink: 0; }
+  .n8n-conn .line { height: 2px; width: 30px; background: #bbb; position: relative; }
+  .n8n-conn .line::after { content: ''; position: absolute; right: -6px; top: -4px; border: 5px solid transparent; border-left-color: #bbb; }
+  .node-detail-panel { background: white; border-top: 1px solid #e5e5e5; padding: 16px 20px; font-size: 13px; display: none; }
+  .node-detail-panel.visible { display: block; }
+  .node-detail-panel h4 { margin: 0 0 10px 0; color: #6b21a8; font-size: 14px; }
+  .node-detail-panel .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .node-detail-panel .detail-item label { font-size: 11px; color: #888; display: block; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .node-detail-panel .detail-item .val { font-size: 13px; color: #222; background: #f8f8f8; padding: 4px 8px; border-radius: 4px; font-family: monospace; }
+  .node-detail-panel .close-btn { float: right; cursor: pointer; color: #888; font-size: 16px; }
+  .node-detail-panel .desc { color: #555; margin-bottom: 12px; font-size: 13px; line-height: 1.5; }
+  .execute-bar { background: white; border-top: 1px solid #e5e5e5; padding: 10px; text-align: center; }
+  .execute-btn { background: #ff6d5a; color: white; border: none; padding: 8px 24px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: default; opacity: 0.85; }
+
+  /* ══════════════════════════════════
+     FLOWISE VIZUALIZÁCIÓ
+  ══════════════════════════════════ */
+  .flowise-container { background: #fafafa; border-radius: 10px; overflow: hidden; border: 1px solid #ddd; margin: 18px 0; }
+  .flowise-toolbar { background: white; border-bottom: 1px solid #e5e5e5; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .flowise-toolbar .wf-title { font-weight: 700; color: #222; font-size: 15px; }
+  .flowise-toolbar .fl-logo { color: #2563eb; font-weight: 800; font-size: 16px; }
+  .flowise-canvas { padding: 28px; display: flex; align-items: flex-start; gap: 20px; overflow-x: auto; background-image: radial-gradient(circle, #ddd 1px, transparent 1px); background-size: 20px 20px; min-height: 300px; }
+  .fl-node { background: white; border: 1px solid #e0e0e0; border-radius: 8px; width: 220px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.2s; }
+  .fl-node:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.14); transform: translateY(-2px); }
+  .fl-node .fl-header { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .fl-node .fl-body { padding: 12px 14px; }
+  .fl-node .fl-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .fl-node .fl-value { font-size: 12px; color: #222; background: #f5f5f5; padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .fl-node .fl-dot { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 11px; color: #666; }
+  .fl-node .fl-dot::before { content: '●'; color: #bbb; font-size: 8px; }
+  .fl-node .fl-output { padding: 8px 14px; border-top: 1px solid #f0f0f0; font-size: 11px; color: #888; display: flex; justify-content: space-between; }
+  .fl-conn { display: flex; align-items: center; padding-top: 60px; flex-shrink: 0; }
+  .prompt-box { background: #1e1e2e; border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.7; color: #cdd6f4; white-space: pre-wrap; border-left: 4px solid #6b21a8; max-height: 300px; overflow-y: auto; }
+  .prompt-box .pk { color: #f38ba8; font-weight: bold; }
+  .prompt-box .pv { color: #a6e3a1; }
+  .prompt-box .ps { color: #fab387; font-weight: bold; }
+  .prompt-box .pc { color: #6c7086; }
+
+  @media (max-width: 640px) {
+    .diplomamunka-fejlec { padding: 20px 16px; }
+    .projekt-szekció { padding: 16px; }
+    .flowise-canvas { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ FEJLÉC ═══════════════ -->
+<div class="diplomamunka-fejlec">
+  <h1 style="color:white;">Diplomamunka Rendszerterv</h1>
+  <p><strong>Hallgató:</strong> Varga Andrea</p>
+  <p><strong>Intézmény:</strong> Pázmány Péter Katolikus Egyetem — Információs Technológiai és Bionika Kar</p>
+  <p><strong>Szak:</strong> Mesterséges Intelligencia Alkalmazásai Szakirányú Továbbképzés</p>
+  <p><strong>Témavezető:</strong> Dr. Tornai Kálmán<br><span style="font-size:13px; opacity:0.8;">dékánhelyettes, egyetemi docens</span></p>
+  <p><strong>Tanév:</strong> 2025–2026</p>
+  <p class="alcim"><em>Adatvezérelt döntéstámogató rendszer fejlesztése az energiaszektorban — Ipari igényeken alapuló prediktív modell és vizualizációs keretrendszer (MVM-DataInsight)</em></p>
+  <div class="projektek-sor">
+    <span class="projekt-badge ent">🤖 Enterprise AI Agent Hub</span>
+    <span class="projekt-badge mvm">🔋 MVM-DataInsight</span>
+  </div>
+</div>
+
+<!-- ═══════════════ NAVIGÁCIÓ ═══════════════ -->
+<div class="nav">
+  <a href="#enterprise" class="ent">🤖 Enterprise AI Agent Hub</a>
+  <a href="#mvm" class="mvm">🔋 MVM-DataInsight</a>
+  <a href="#kapcsolat" class="sec">🔗 Rendszer összekötés</a>
+  <a href="#tantargyak" class="sec">📚 Tantárgyi lefedettség</a>
+  <a href="#irodalom" class="sec">📖 Irodalomjegyzék</a>
+</div>
+
+<!-- ═══════════════ ÉLŐ LINKEK ═══════════════ -->
+<div style="background: linear-gradient(135deg, #3b0764 0%, #1a3c5e 60%, #0C6B4A 100%); border-radius: 12px; padding: 24px 28px; margin-bottom: 28px;">
+  <h2 style="color:white; border-left:5px solid rgba(255,255,255,0.4); padding-left:12px; margin-top:0;">🔗 Élő rendszer — Kattintható linkek</h2>
+  <p style="color:rgba(255,255,255,0.75); font-size:13px; margin-bottom:16px;">A projekt összes komponense elérhető az alábbi linkeken.</p>
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+    <a href="https://mvm-dashboard.onrender.com" target="_blank" class="link-btn render" style="text-align:center;">🚀 Render Dashboard</a>
+    <a href="https://colab.research.google.com/drive/1sRgN-FHMHvXpUidpCyFRMJCXEIa_Hud1?usp=sharing" target="_blank" class="link-btn colab" style="text-align:center;">📓 Google Colab Notebook</a>
+    <a href="https://github.com/magroandi28-lang/mvm-dashboard" target="_blank" class="link-btn github" style="text-align:center;">📦 GitHub Repository</a>
+    <a href="https://datastudio.google.com/reporting/8c3f7682-f3b9-4de8-b785-af8c32f692f8" target="_blank" class="link-btn looker" style="text-align:center;">📊 Looker Studio Dashboard</a>
+    <a href="https://docs.google.com/spreadsheets/d/1kQL9bgMQxRafrSUIAuiJ3E-UX2zJ75dap8UUfRXJ-Cw/edit?usp=sharing" target="_blank" class="link-btn" style="background:#0f9d58; text-align:center;">📋 Google Sheets (EMAILEK)</a>
+  </div>
+  <p style="color:rgba(255,255,255,0.55); font-size:11px; margin-top:12px; margin-bottom:0;">⚠️ Render dashboard első betöltése 30–50 másodpercet vehet igénybe (cold start).</p>
+</div>
+
+<!-- ═══════════════ TELJES ARCHITEKTÚRA SVG ═══════════════ -->
+<div class="projekt-szekció sec" style="text-align:center;">
+  <h2 class="sec">🏗️ Rendszer Architektúra — Teljes Pipeline</h2>
+  <p style="font-size:13px; color:#555; margin-bottom:16px;">Az Enterprise AI Agent Hub és az MVM-DataInsight projekt kapcsolata és belső felépítése</p>
+  <div style="max-width:100%; overflow-x:auto;">
+<svg width="100%" viewBox="0 0 680 780" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- ENTERPRISE blokk -->
+<rect x="16" y="16" width="648" height="355" rx="6" fill="#042C53" stroke="#042C53" stroke-width="1.5"/>
+<rect x="16" y="16" width="648" height="36" rx="6" fill="#0C447C"/>
+<rect x="16" y="40" width="648" height="12" fill="#0C447C"/>
+<text font-family="sans-serif" font-weight="600" font-size="13" x="34" y="38" fill="#fff" dominant-baseline="central">ENTERPRISE AI AGENT HUB</text>
+<text font-family="sans-serif" font-size="10" x="644" y="38" text-anchor="end" fill="#85B7EB" dominant-baseline="central">Prompt Engineering · Szkript nyelvek · MI alkalmazásfejlesztés</text>
+
+<!-- Pipeline sor -->
+<text font-family="sans-serif" font-size="10" x="34" y="68" fill="#85B7EB">FELDOLGOZÁSI PIPELINE</text>
+<rect x="36" y="76" width="108" height="48" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="90" y="100" text-anchor="middle" fill="#fff" dominant-baseline="central">📧 Gmail</text>
+<rect x="172" y="76" width="108" height="48" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="226" y="100" text-anchor="middle" fill="#fff" dominant-baseline="central">⚡ n8n</text>
+<rect x="308" y="76" width="108" height="48" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="362" y="100" text-anchor="middle" fill="#fff" dominant-baseline="central">🧠 Flowise AI</text>
+<rect x="444" y="76" width="108" height="48" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="498" y="100" text-anchor="middle" fill="#fff" dominant-baseline="central">📊 Sheets</text>
+<rect x="580" y="76" width="72" height="48" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="616" y="100" text-anchor="middle" fill="#fff" dominant-baseline="central">Looker</text>
+<line x1="144" y1="100" x2="170" y2="100" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="280" y1="100" x2="306" y2="100" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="416" y1="100" x2="442" y2="100" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="552" y1="100" x2="578" y2="100" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Switch sor -->
+<line x1="36" y1="148" x2="644" y2="148" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="340" y="163" text-anchor="middle" fill="#85B7EB">SWITCH NODE — Kategória alapú elágazás</text>
+<rect x="36" y="172" width="120" height="44" rx="4" fill="#3d0f0f" stroke="#E24B4A" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="96" y="190" text-anchor="middle" fill="#fff" dominant-baseline="central">SÜRGŐS</text>
+<text font-family="sans-serif" font-size="10" x="96" y="207" text-anchor="middle" fill="#F7C1C1" dominant-baseline="central">Visszaigazolás + link</text>
+<rect x="176" y="172" width="120" height="44" rx="4" fill="#1e1e1e" stroke="#888780" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="236" y="190" text-anchor="middle" fill="#fff" dominant-baseline="central">MAGAS</text>
+<text font-family="sans-serif" font-size="10" x="236" y="207" text-anchor="middle" fill="#D3D1C7" dominant-baseline="central">Automata válasz</text>
+<rect x="316" y="172" width="120" height="44" rx="4" fill="#1e1e1e" stroke="#888780" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="376" y="190" text-anchor="middle" fill="#fff" dominant-baseline="central">NORMÁL</text>
+<text font-family="sans-serif" font-size="10" x="376" y="207" text-anchor="middle" fill="#D3D1C7" dominant-baseline="central">Feldolgozás</text>
+<rect x="456" y="172" width="172" height="44" rx="4" fill="#3d2200" stroke="#EF9F27" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="542" y="190" text-anchor="middle" fill="#fff" dominant-baseline="central">DASHBOARD</text>
+<text font-family="sans-serif" font-size="10" x="542" y="207" text-anchor="middle" fill="#FAC775" dominant-baseline="central">MVM Render link küldése</text>
+<line x1="36" y1="163" x2="644" y2="163" stroke="#378ADD" stroke-width="0.5"/>
+<line x1="96" y1="163" x2="96" y2="170" stroke="#E24B4A" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="236" y1="163" x2="236" y2="170" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="376" y1="163" x2="376" y2="170" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="542" y1="163" x2="542" y2="170" stroke="#EF9F27" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Hibakezelés -->
+<line x1="36" y1="230" x2="644" y2="230" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="244" fill="#85B7EB">HIBAKEZELÉS</text>
+<rect x="36" y="252" width="172" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="122" y="270" text-anchor="middle" fill="#fff" dominant-baseline="central">🏷️ CIMKEZO</text>
+<text font-family="sans-serif" font-size="10" x="122" y="287" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">Gmail label: Feldolgozva</text>
+<rect x="228" y="252" width="172" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="314" y="270" text-anchor="middle" fill="#fff" dominant-baseline="central">📋 HIBAJEGY_NODE</text>
+<text font-family="sans-serif" font-size="10" x="314" y="287" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">Sheets · hibák rögzítése</text>
+<rect x="420" y="252" width="172" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="506" y="270" text-anchor="middle" fill="#fff" dominant-baseline="central">📧 HIBA_ÉRTESÍTŐ</text>
+<text font-family="sans-serif" font-size="10" x="506" y="287" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">Gmail · értesítő email</text>
+<line x1="208" y1="274" x2="226" y2="274" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="400" y1="274" x2="418" y2="274" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Worker Briefing -->
+<rect x="36" y="316" width="608" height="40" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="340" y="336" text-anchor="middle" fill="#fff" dominant-baseline="central">⏰ Worker Briefing — Napi összefoglaló: Schedule → Sheets olvasás → JS Code → Gmail</text>
+
+<!-- Összekötő nyíl -->
+<line x1="340" y1="371" x2="340" y2="406" stroke="#EF9F27" stroke-width="2" stroke-dasharray="6 3" marker-end="url(#arrow)"/>
+<text font-family="sans-serif" font-size="11" x="340" y="392" text-anchor="middle" fill="#EF9F27">INTEGRÁCIÓS PONT — DASHBOARD kategória</text>
+
+<!-- MVM blokk -->
+<rect x="16" y="410" width="648" height="354" rx="6" fill="#042C53" stroke="#042C53" stroke-width="1.5"/>
+<rect x="16" y="410" width="648" height="36" rx="6" fill="#0C447C"/>
+<rect x="16" y="434" width="648" height="12" fill="#0C447C"/>
+<text font-family="sans-serif" font-weight="600" font-size="13" x="34" y="432" fill="#fff" dominant-baseline="central">MVM-DATAINSIGHT</text>
+<text font-family="sans-serif" font-size="10" x="644" y="432" text-anchor="end" fill="#85B7EB" dominant-baseline="central">Python · PyTorch · CrewAI · Streamlit · Render · GitHub</text>
+
+<!-- Adatforrások -->
+<text font-family="sans-serif" font-size="10" x="34" y="460" fill="#85B7EB">ADATFORRÁSOK</text>
+<rect x="36" y="468" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="83" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">MEKH</text>
+<rect x="140" y="468" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="187" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">HUPX</text>
+<rect x="244" y="468" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="291" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">ECB</text>
+<rect x="348" y="468" width="104" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="400" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">Open-Meteo</text>
+<rect x="462" y="468" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="509" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">ENTSO-E</text>
+<rect x="566" y="468" width="82" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="607" y="490" text-anchor="middle" fill="#fff" dominant-baseline="central">KSH</text>
+
+<!-- Modellek -->
+<line x1="36" y1="526" x2="644" y2="526" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="540" fill="#85B7EB">MODELLRÉTEG</text>
+<rect x="36" y="548" width="128" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="100" y="570" text-anchor="middle" fill="#fff" dominant-baseline="central">PyTorch V1</text>
+<rect x="178" y="548" width="128" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="242" y="570" text-anchor="middle" fill="#fff" dominant-baseline="central">PyTorch V2</text>
+<rect x="320" y="548" width="148" height="44" rx="4" fill="#0C6B4A" stroke="#68d391" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="394" y="563" text-anchor="middle" fill="#fff" dominant-baseline="central">Ensemble modell</text>
+<text font-family="sans-serif" font-size="10" x="394" y="580" text-anchor="middle" fill="#dcf4ec" dominant-baseline="central">99,41% — MAE: 31,09 MWh</text>
+<rect x="482" y="548" width="152" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="558" y="570" text-anchor="middle" fill="#fff" dominant-baseline="central">CrewAI ágensek</text>
+<line x1="164" y1="570" x2="176" y2="570" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="306" y1="570" x2="318" y2="570" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<line x1="468" y1="570" x2="480" y2="570" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Deployment -->
+<line x1="36" y1="606" x2="644" y2="606" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="620" fill="#85B7EB">DEPLOYMENT</text>
+<rect x="36" y="628" width="108" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="90" y="650" text-anchor="middle" fill="#fff" dominant-baseline="central">GitHub CI/CD</text>
+<line x1="144" y1="650" x2="172" y2="650" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="176" y="628" width="452" height="44" rx="4" fill="#0C6B4A" stroke="#68d391" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="402" y="646" text-anchor="middle" fill="#fff" dominant-baseline="central">Render Dashboard — Streamlit</text>
+<text font-family="sans-serif" font-size="10" x="402" y="663" text-anchor="middle" fill="#dcf4ec" dominant-baseline="central">mvm-dashboard.onrender.com</text>
+<line x1="394" y1="592" x2="394" y2="626" stroke="#68d391" stroke-width="1" marker-end="url(#arrow)"/>
+</svg>
+  </div>
+</div>
+
+<!-- ═══════════════ TANTÁRGYI LEFEDETTSÉG ═══════════════ -->
+<div class="projekt-szekció sec" id="tantargyak">
+  <h2 class="sec">📚 Tantárgyi lefedettség</h2>
+  <table class="csv-table sec">
+    <tr><th>Tantárgy</th><th>Projekt</th><th>Bizonyíték</th></tr>
+    <tr><td><strong>Prompt Engineering</strong></td><td>Enterprise AI Agent Hub</td><td>Flowise system prompt, JSON output kényszerítés, few-shot, negatív utasítások</td></tr>
+    <tr><td><strong>Szkript nyelvek</strong></td><td>Enterprise Hub + MVM</td><td>n8n JavaScript Code node, Python pandas pipeline, API hívások</td></tr>
+    <tr><td><strong>MI alapú alkalmazásfejlesztés</strong></td><td>MVM-DataInsight</td><td>PyTorch neurális háló, Ensemble modell (99,41%), CrewAI ágensek, Streamlit</td></tr>
+    <tr><td><strong>Egyéni téma</strong></td><td>MVM-DataInsight (integrált)</td><td>Konfabuláció kizárása, valós adatforrások, két rendszer integrációja</td></tr>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     ENTERPRISE AI AGENT HUB SZEKCIÓ
+═══════════════════════════════════════════════════ -->
+<h1 class="ent" id="enterprise">🤖 Enterprise AI Agent Hub</h1>
+
+<!-- Architektúra kártya -->
+<div class="projekt-szekció ent">
+  <h2 class="ent">🏗️ Rendszer Architektúra</h2>
+  <p style="font-size:13px; color:#555;">Gmail bejövő e-mailek → n8n automatizáció → Flowise AI elemzés → Google Sheets → Looker Studio BI dashboard</p>
+<svg width="100%" viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr-e" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-c" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#c4b5fd" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#6b21a8" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+</defs>
+<rect x="8" y="8" width="844" height="324" rx="6" fill="#2d0060" stroke="#6b21a8" stroke-width="1.5"/>
+<rect x="8" y="8" width="844" height="32" rx="6" fill="#3b0764"/>
+<rect x="8" y="30" width="844" height="10" fill="#3b0764"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="22" y="28" fill="#fff" dominant-baseline="central">ENTERPRISE AI AGENT HUB</text>
+<text font-family="sans-serif" font-size="10" x="844" y="28" text-anchor="end" fill="#d8b4fe" dominant-baseline="central">n8n · Flowise · GPT-4o-mini · Google Sheets · Looker Studio  </text>
+<text font-family="sans-serif" font-size="10" x="22" y="56" fill="#a78bfa">BEMENET</text>
+<rect x="22" y="62" width="100" height="44" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="72" y="84" text-anchor="middle" fill="#fff" dominant-baseline="central">📧 Gmail</text>
+<text font-family="sans-serif" font-size="10" x="72" y="98" text-anchor="middle" fill="#d8b4fe" dominant-baseline="central">Bejövő emailek</text>
+<text font-family="sans-serif" font-size="10" x="148" y="56" fill="#a78bfa">AUTOMATIZÁCIÓ — n8n</text>
+<rect x="148" y="62" width="105" height="44" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="200" y="84" text-anchor="middle" fill="#fff" dominant-baseline="central">⏰ Schedule</text>
+<rect x="270" y="62" width="110" height="44" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="325" y="84" text-anchor="middle" fill="#fff" dominant-baseline="central">🌐 HTTP</text>
+<text font-family="sans-serif" font-size="10" x="325" y="98" text-anchor="middle" fill="#d8b4fe" dominant-baseline="central">Request → Flowise</text>
+<text font-family="sans-serif" font-size="10" x="22" y="130" fill="#a78bfa">AI ELEMZÉS — Flowise + GPT-4o-mini</text>
+<rect x="22" y="136" width="340" height="44" rx="4" fill="#4c1d95" stroke="#c4b5fd" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="192" y="158" text-anchor="middle" fill="#fff" dominant-baseline="central">🧠 Intelligens elemző AI_Flowise</text>
+<rect x="378" y="136" width="100" height="44" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="428" y="158" text-anchor="middle" fill="#fff" dominant-baseline="central">⚡ Switch</text>
+<text font-family="sans-serif" font-size="10" x="428" y="172" text-anchor="middle" fill="#d8b4fe" dominant-baseline="central">Kategória alapján</text>
+<text font-family="sans-serif" font-size="10" x="500" y="130" fill="#a78bfa">WORKER BRIEFING</text>
+<rect x="500" y="136" width="330" height="44" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="665" y="158" text-anchor="middle" fill="#fff" dominant-baseline="central">⏰ Worker Briefing workflow</text>
+<text font-family="sans-serif" font-size="10" x="22" y="206" fill="#a78bfa">KIMENET ÉS ADATTÁR</text>
+<rect x="22" y="212" width="115" height="40" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="79" y="232" text-anchor="middle" fill="#fff" dominant-baseline="central">📧 SÜRGŐS</text>
+<rect x="150" y="212" width="130" height="40" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="215" y="232" text-anchor="middle" fill="#fff" dominant-baseline="central">📋 Sheets</text>
+<rect x="294" y="212" width="115" height="40" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="351" y="232" text-anchor="middle" fill="#fff" dominant-baseline="central">🏷️ CIMKEZO</text>
+<rect x="424" y="212" width="130" height="40" rx="4" fill="#4c1d95" stroke="#c4b5fd" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="489" y="232" text-anchor="middle" fill="#fff" dominant-baseline="central">📊 DASHBOARD</text>
+<rect x="568" y="212" width="130" height="40" rx="4" fill="#3b0764" stroke="#a78bfa" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="633" y="232" text-anchor="middle" fill="#fff" dominant-baseline="central">📋 HIBAJEGY</text>
+<rect x="22" y="276" width="810" height="46" rx="4" fill="#3b0764" stroke="#4c1d95" stroke-width="1"/>
+<text font-family="sans-serif" font-size="10" x="34" y="294" fill="#a78bfa" dominant-baseline="central">📌 Pipeline:</text>
+<text font-family="sans-serif" font-size="10" x="34" y="312" fill="#d8b4fe" dominant-baseline="central">Gmail → Schedule → HTTP → AI Flowise → Switch → SÜRGŐS / Sheets / CIMKEZO / DASHBOARD   |   Hibaág: CIMKEZO → HIBAJEGY → értesítés</text>
+<line x1="122" y1="84" x2="146" y2="84" stroke="#a78bfa" stroke-width="1" marker-end="url(#arr-e)"/>
+<line x1="253" y1="84" x2="268" y2="84" stroke="#a78bfa" stroke-width="1" marker-end="url(#arr-e)"/>
+<line x1="325" y1="106" x2="325" y2="134" stroke="#a78bfa" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arr-e)"/>
+<line x1="362" y1="158" x2="376" y2="158" stroke="#a78bfa" stroke-width="1" marker-end="url(#arr-e)"/>
+<line x1="428" y1="180" x2="79" y2="210" stroke="#a78bfa" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#arr-e)"/>
+<line x1="428" y1="180" x2="215" y2="210" stroke="#a78bfa" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#arr-e)"/>
+<line x1="428" y1="180" x2="351" y2="210" stroke="#a78bfa" stroke-width="0.8" stroke-dasharray="3 3" marker-end="url(#arr-e)"/>
+<line x1="428" y1="180" x2="489" y2="210" stroke="#c4b5fd" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arr-c)"/>
+<line x1="215" y1="212" x2="590" y2="180" stroke="#6b21a8" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arr-b)"/>
+</svg>
+</div>
+
+<!-- ═══ N8N INTERAKTÍV WORKFLOW ═══ -->
+<h1 class="ent" id="n8n-workflow">⚡ Interaktív n8n Workflow-k</h1>
+<p style="font-size:14px; color:#555;">Kattints bármelyik node-ra a részletek megtekintéséhez!</p>
+
+<h2 class="ent">1. workflow — Enterprise-AI-Agent-Hub</h2>
+<div class="n8n-container">
+  <div class="n8n-toolbar">
+    <div class="breadcrumb"><span style="color:#888;">Personal</span><span style="color:#bbb; margin:0 4px;">/</span><span class="wf-name">Enterprise-AI-Agent-Hub</span></div>
+    <div class="tabs"><span class="tab active">Editor</span><span class="tab">Executions</span></div>
+    <button class="publish-btn">Publish</button>
+  </div>
+  <div class="n8n-canvas">
+    <div class="workflow-row">
+      <div class="n8n-node trigger" onclick="showDetail('schedule1')">
+        <div class="dot-r"></div>
+        <span class="node-icon">⏰</span>
+        <div class="node-name">Schedule Trigger</div>
+        <div class="node-sub">60 percenként</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('getmany')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📧</span>
+        <div class="node-name">Get many messages</div>
+        <div class="node-sub">Gmail · get message</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('getone')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📧</span>
+        <div class="node-name">Get a message</div>
+        <div class="node-sub">Gmail · get message</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('http')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">🌐</span>
+        <div class="node-name">HTTP Request</div>
+        <div class="node-sub">POST → Flowise API</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('editfields')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">✏️</span>
+        <div class="node-name">Edit Fields</div>
+        <div class="node-sub">JSON → mezők</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('sheets')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📊</span>
+        <div class="node-name">EMAILEK_<br>FELADATOK</div>
+        <div class="node-sub">Sheets · append</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('switchnode')" style="border-left:4px solid #6b21a8;">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">⚡</span>
+        <div class="node-name">Switch</div>
+        <div class="node-sub">router · logic</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('automata')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📧</span>
+        <div class="node-name">AUTOMATA_<br>VÁLASZ</div>
+        <div class="node-sub">Gmail · send</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('dashboard')" style="border-left:4px solid #1a73e8;">
+        <div class="dot-l"></div>
+        <span class="node-icon">📊</span>
+        <div class="node-name">DASHBOARD</div>
+        <div class="node-sub">Gmail · send</div>
+      </div>
+    </div>
+    <div style="margin-top:8px; display:flex; align-items:center; gap:0; padding-left:140px;">
+      <div class="n8n-node" onclick="showDetail('cimkezo')" style="max-width:115px;">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">🏷️</span>
+        <div class="node-name">CIMKEZO</div>
+        <div class="node-sub">Gmail · add labels</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('hibajegy')" style="max-width:120px;">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📋</span>
+        <div class="node-name">HIBAJEGY_NODE</div>
+        <div class="node-sub">Sheets · append</div>
+      </div>
+      <div class="n8n-conn"><div class="line"></div></div>
+      <div class="n8n-node" onclick="showDetail('sendmsg')" style="max-width:115px;">
+        <div class="dot-l"></div>
+        <span class="node-icon">📧</span>
+        <div class="node-name">HIBA_ÉRTESÍTŐ</div>
+        <div class="node-sub">Gmail · send</div>
+      </div>
+    </div>
+    <div style="font-size:11px; color:#888; margin-top:10px;">⬆️ Fő ág: email feldolgozás &nbsp;|&nbsp; ⬇️ Hibaág: Flowise hiba esetén</div>
+  </div>
+  <div class="node-detail-panel" id="detail-panel-1">
+    <span class="close-btn" onclick="closeDetail(1)">✕</span>
+    <h4 id="detail-title-1"></h4>
+    <p class="desc" id="detail-desc-1"></p>
+    <div class="detail-grid" id="detail-grid-1"></div>
+  </div>
+  <div class="execute-bar"><button class="execute-btn">⚡ Execute workflow</button></div>
+</div>
+
+<h2 class="ent">2. workflow — Worker Briefing</h2>
+<div class="n8n-container">
+  <div class="n8n-toolbar">
+    <div class="breadcrumb"><span style="color:#888;">Personal</span><span style="color:#bbb; margin:0 4px;">/</span><span class="wf-name">Worker Briefing</span></div>
+    <div class="tabs"><span class="tab active">Editor</span><span class="tab">Executions</span></div>
+    <button class="publish-btn">Publish</button>
+  </div>
+  <div class="n8n-canvas">
+    <div class="workflow-row" style="justify-content:center; padding:20px 0;">
+      <div class="n8n-node trigger" onclick="showDetail2('b-schedule')">
+        <div class="dot-r"></div>
+        <span class="node-icon">⏰</span>
+        <div class="node-name">Schedule Trigger</div>
+        <div class="node-sub">napi reggel</div>
+      </div>
+      <div class="n8n-conn"><div class="line" style="width:60px;"></div></div>
+      <div class="n8n-node" onclick="showDetail2('b-sheets')">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">📊</span>
+        <div class="node-name">Get row(s) in sheet</div>
+        <div class="node-sub">Sheets · read</div>
+      </div>
+      <div class="n8n-conn"><div class="line" style="width:60px;"></div></div>
+      <div class="n8n-node" onclick="showDetail2('b-js')" style="border-top:3px solid #f59e0b;">
+        <div class="dot-l"></div><div class="dot-r"></div>
+        <span class="node-icon">{}</span>
+        <div class="node-name">Code in JavaScript</div>
+        <div class="node-sub">feladatlista</div>
+      </div>
+      <div class="n8n-conn"><div class="line" style="width:60px;"></div></div>
+      <div class="n8n-node" onclick="showDetail2('b-send')">
+        <div class="dot-l"></div>
+        <span class="node-icon">📧</span>
+        <div class="node-name">Send a message</div>
+        <div class="node-sub">Gmail · send</div>
+      </div>
+    </div>
+  </div>
+  <div class="node-detail-panel" id="detail-panel-2">
+    <span class="close-btn" onclick="closeDetail(2)">✕</span>
+    <h4 id="detail-title-2"></h4>
+    <p class="desc" id="detail-desc-2"></p>
+    <div class="detail-grid" id="detail-grid-2"></div>
+  </div>
+  <div class="execute-bar"><button class="execute-btn">⚡ Execute workflow</button></div>
+</div>
+
+<!-- ═══ FLOWISE VIZUALIZÁCIÓ ═══ -->
+<h1 class="ent" id="flowise">🧠 Flowise Chatflow — Intelligens elemző AI</h1>
+<p style="font-size:14px; color:#555;">Kattints a node-okra a részletek és a teljes Prompt Template megtekintéséhez!</p>
+<div class="flowise-container">
+  <div class="flowise-toolbar">
+    <span class="fl-logo">⋮⋮ Flowise</span>
+    <span style="color:#888; font-size:18px;">*</span>
+    <span class="wf-title">Intelligens elemzo AI_Flowise</span>
+    <span style="cursor:pointer;">✏️</span>
+  </div>
+  <div class="flowise-canvas">
+    <div class="fl-node" onclick="showFlowiseDetail('openai')">
+      <div class="fl-header" style="background:#f0fdf4;">🤖 OpenAI</div>
+      <div class="fl-body">
+        <div class="fl-label">Model Name</div><div class="fl-value">gpt-4o-mini (latest)</div>
+        <div class="fl-label">Temperature</div><div class="fl-value">0</div>
+      </div>
+      <div class="fl-output"><span>Output</span><span>ChatOpenAI ●</span></div>
+    </div>
+    <div class="fl-conn"><svg width="60" height="100"><path d="M0 50 C30 50, 30 50, 60 50" stroke="#bbb" stroke-width="2" fill="none" marker-end="url(#arr-fl)"/><defs><marker id="arr-fl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#bbb" stroke-width="2"/></marker></defs></svg></div>
+    <div class="fl-node" onclick="showFlowiseDetail('llmchain')">
+      <div class="fl-header" style="background:#eff6ff;">🔗 LLM Chain</div>
+      <div class="fl-body">
+        <div class="fl-dot">Language Model *</div>
+        <div class="fl-dot">Prompt *</div>
+        <div class="fl-dot">Output Parser</div>
+      </div>
+      <div class="fl-output"><span>Output</span><span>LLM Chain ●</span></div>
+    </div>
+    <div class="fl-conn"><svg width="60" height="100"><path d="M0 50 C30 50, 30 50, 60 50" stroke="#bbb" stroke-width="2" fill="none" marker-end="url(#arr-fl)"/></svg></div>
+    <div class="fl-node" onclick="showFlowiseDetail('prompt')" style="border:2px solid #6b21a8;">
+      <div class="fl-header" style="background:#faf5ff;">📝 Prompt Template <span style="margin-left:auto; background:#6b21a8; color:white; font-size:10px; padding:2px 6px; border-radius:4px;">⭐ KATTINTS!</span></div>
+      <div class="fl-body">
+        <div class="fl-label">Template (részlet)</div>
+        <div style="background:#1e1e2e; color:#cdd6f4; padding:8px; border-radius:4px; font-size:11px; font-family:monospace; line-height:1.5;">Te egy MVM-DataInsight<br>automatizációs asszisztens<br>vagy. Elemezd: {question}.<br>TASKS: ...</div>
+      </div>
+      <div class="fl-output"><span>Output</span><span>PromptTemplate ●</span></div>
+    </div>
+  </div>
+  <div class="node-detail-panel" id="flowise-detail-panel">
+    <span class="close-btn" onclick="document.getElementById('flowise-detail-panel').classList.remove('visible')">✕</span>
+    <h4 id="flowise-detail-title"></h4>
+    <p class="desc" id="flowise-detail-desc"></p>
+    <div id="flowise-detail-content"></div>
+  </div>
+</div>
+
+<!-- ═══ HITELESÍTÉSI ARCHITEKTÚRA (ÚJ) ═══ -->
+<div class="projekt-szekció ent" id="auth">
+  <h2 class="ent">🔐 Hitelesítési Architektúra</h2>
+  <p style="font-size:13px; color:#555; margin-bottom:16px;">A rendszer két rétegű hitelesítési megközelítést alkalmaz — a <strong>least privilege</strong> elv alapján.</p>
+
+  <!-- Két réteg összehasonlítás -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+    <div style="background:#faf5ff; border:1.5px solid #d8b4fe; border-radius:10px; padding:18px;">
+      <div style="font-size:13px; font-weight:700; color:#6b21a8; margin-bottom:10px;">🤖 Service Account</div>
+      <div style="font-size:12px; color:#444; line-height:1.8;">
+        <strong>Célra:</strong> Google Sheets írás/olvasás<br>
+        <strong>Fiók:</strong> <code style="font-size:11px; background:#f3e8ff; padding:1px 4px; border-radius:3px;">n8n-agent-bot@enterprise-ai-agent-hub.iam.gserviceaccount.com</code><br>
+        <strong>Szerepkör:</strong> Editor (Sheets-re korlátozva)<br>
+        <strong>Elv:</strong> Least privilege — emailekhez NEM fér hozzá
+      </div>
+    </div>
+    <div style="background:#eff6ff; border:1.5px solid #93c5fd; border-radius:10px; padding:18px;">
+      <div style="font-size:13px; font-weight:700; color:#1d4ed8; margin-bottom:10px;">👤 OAuth2</div>
+      <div style="font-size:12px; color:#444; line-height:1.8;">
+        <strong>Célra:</strong> Gmail olvasás és küldés<br>
+        <strong>Fiók:</strong> Felhasználó nevében (magroandi28@gmail.com)<br>
+        <strong>Token:</strong> Refresh token, korlátozott scope<br>
+        <strong>Elv:</strong> Felhasználói hozzájárulás alapján
+      </div>
+    </div>
+  </div>
+
+  <!-- OAuth2 Flow diagram -->
+  <h3 style="color:#6b21a8; margin-bottom:12px;">OAuth2 Authorization Flow</h3>
+  <p style="font-size:12px; color:#888; margin-bottom:14px;">Kattints a lépésekre a részletekért!</p>
+  <div style="background:#0f172a; border-radius:10px; padding:24px; overflow-x:auto;">
+    <div style="display:flex; align-items:flex-start; gap:0; min-width:680px;">
+
+      <!-- Aktor: Felhasználó -->
+      <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
+        <div style="width:60px; height:60px; border-radius:50%; background:#1e3a5f; border:2px solid #3b82f6; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer;" onclick="showAuth('user')" title="Felhasználó">👤</div>
+        <div style="font-size:11px; font-weight:700; color:#94a3b8; margin-top:8px; text-align:center; width:80px;">Felhasználó<br>(Varga Andrea)</div>
+      </div>
+
+      <!-- Nyilak 1 -->
+      <div style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:8px 4px; gap:4px; min-width:100px;">
+        <div style="display:flex; align-items:center; gap:6px; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step1')" onmouseover="this.style.background='rgba(59,130,246,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#3b82f6,#60a5fa);"></div>
+          <div style="width:0; height:0; border-left:7px solid #60a5fa; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#60a5fa; white-space:nowrap;">① Auth kérés</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex-direction:row-reverse; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step2')" onmouseover="this.style.background='rgba(34,197,94,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#22c55e,#4ade80);"></div>
+          <div style="width:0; height:0; border-right:7px solid #4ade80; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#4ade80; white-space:nowrap;">② Hozzájárulás</span>
+        </div>
+      </div>
+
+      <!-- Aktor: Google Auth -->
+      <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
+        <div style="width:60px; height:60px; border-radius:50%; background:#1e3a1e; border:2px solid #22c55e; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer;" onclick="showAuth('google')" title="Google Auth Server">🔑</div>
+        <div style="font-size:11px; font-weight:700; color:#94a3b8; margin-top:8px; text-align:center; width:80px;">Google Auth<br>Server</div>
+      </div>
+
+      <!-- Nyilak 2 -->
+      <div style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:8px 4px; gap:4px; min-width:100px;">
+        <div style="display:flex; align-items:center; gap:6px; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step3')" onmouseover="this.style.background='rgba(168,85,247,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#a855f7,#c084fc);"></div>
+          <div style="width:0; height:0; border-left:7px solid #c084fc; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#c084fc; white-space:nowrap;">③ Token kiadás</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step4')" onmouseover="this.style.background='rgba(251,146,60,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#fb923c,#fdba74);"></div>
+          <div style="width:0; height:0; border-left:7px solid #fdba74; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#fdba74; white-space:nowrap;">④ API hívás</span>
+        </div>
+      </div>
+
+      <!-- Aktor: n8n -->
+      <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;">
+        <div style="width:60px; height:60px; border-radius:50%; background:#2d0050; border:2px solid #a855f7; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer;" onclick="showAuth('n8n')" title="n8n">⚡</div>
+        <div style="font-size:11px; font-weight:700; color:#94a3b8; margin-top:8px; text-align:center; width:80px;">n8n<br>Workflow</div>
+      </div>
+
+      <!-- Nyilak 3 -->
+      <div style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:8px 4px; gap:4px; min-width:80px;">
+        <div style="display:flex; align-items:center; gap:6px; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step5')" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#ef4444,#f87171);"></div>
+          <div style="width:0; height:0; border-left:7px solid #f87171; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#f87171; white-space:nowrap;">⑤ Gmail</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; cursor:pointer; border-radius:6px; padding:3px 6px; transition:background 0.2s;" onclick="showAuth('step6')" onmouseover="this.style.background='rgba(16,185,129,0.15)'" onmouseout="this.style.background='transparent'">
+          <div style="flex:1; height:1.5px; background:linear-gradient(90deg,#10b981,#34d399);"></div>
+          <div style="width:0; height:0; border-left:7px solid #34d399; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+          <span style="font-size:10px; color:#34d399; white-space:nowrap;">⑥ Sheets</span>
+        </div>
+      </div>
+
+      <!-- Aktorok: Gmail + Sheets -->
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;">
+        <div style="display:flex; flex-direction:column; align-items:center;">
+          <div style="width:60px; height:60px; border-radius:50%; background:#3a1e1e; border:2px solid #ef4444; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer;" onclick="showAuth('gmail')" title="Gmail API">📧</div>
+          <div style="font-size:11px; font-weight:700; color:#94a3b8; margin-top:6px; text-align:center; width:80px;">Gmail API<br>(OAuth2)</div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center;">
+          <div style="width:60px; height:60px; border-radius:50%; background:#1e3a1e; border:2px solid #16a34a; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer;" onclick="showAuth('sheets')" title="Sheets API">📊</div>
+          <div style="font-size:11px; font-weight:700; color:#94a3b8; margin-top:6px; text-align:center; width:80px;">Sheets API<br>(Service Acc.)</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Auth detail panel -->
+    <div id="auth-detail" style="margin-top:16px; background:#1e293b; border-radius:8px; padding:14px 18px; display:none; font-size:13px; color:#e2e8f0; border-left:3px solid #3b82f6;">
+      <span style="float:right; cursor:pointer; color:#94a3b8;" onclick="document.getElementById('auth-detail').style.display='none'">✕</span>
+      <strong id="auth-detail-title" style="color:#60a5fa;"></strong>
+      <p id="auth-detail-body" style="margin:8px 0 0; line-height:1.6;"></p>
+    </div>
+  </div>
+
+  <!-- Hitelesítési táblázat -->
+  <h3 style="margin-top:20px;">Hitelesítési összefoglaló</h3>
+  <table class="csv-table ent-dark">
+    <tr><th>Szolgáltatás</th><th>Auth típus</th><th>Miért?</th></tr>
+    <tr><td>Google Sheets</td><td>Service Account (JSON kulcs)</td><td>Szerver-szerver, emberi beavatkozás nélkül — least privilege</td></tr>
+    <tr><td>Gmail (olvasás/küldés)</td><td>OAuth2 (refresh token)</td><td>Felhasználói fiókhoz kötött, hozzájárulás alapú</td></tr>
+    <tr><td>Flowise API</td><td>API kulcs (HTTP header)</td><td>REST endpoint hitelesítés</td></tr>
+    <tr><td>Looker Studio</td><td>Google Account (Viewer)</td><td>Dashboard megosztás publikus nézettel</td></tr>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     MVM-DATAINSIGHT SZEKCIÓ
+═══════════════════════════════════════════════════ -->
+<h1 class="mvm" id="mvm">🔋 MVM-DataInsight — Egyéni Téma</h1>
+
+<div class="link-lista">
+  <a href="https://colab.research.google.com/drive/1sRgN-FHMHvXpUidpCyFRMJCXEIa_Hud1?usp=sharing" class="link-btn colab" target="_blank">📓 Google Colab</a>
+  <a href="https://mvm-dashboard.onrender.com" class="link-btn render" target="_blank">🚀 Render Dashboard</a>
+  <a href="https://github.com/magroandi28-lang/mvm-dashboard" class="link-btn github" target="_blank">📦 GitHub Repository</a>
+</div>
+
+<!-- MVM Architektúra -->
+<div class="projekt-szekció mvm" style="text-align:center;">
+  <h2 class="mvm">🏗️ MVM-DataInsight Pipeline</h2>
+  <p style="font-size:13px; color:#555; margin-bottom:16px; text-align:left;">Adatforrásoktól a betanított modelleken át az élő dashboardig</p>
+  <div style="max-width:100%; overflow-x:auto;">
+<svg width="100%" viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow-mvm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/>
+</marker>
+</defs>
+<rect x="16" y="16" width="648" height="368" rx="6" fill="#042C53" stroke="#042C53" stroke-width="1.5"/>
+<rect x="16" y="16" width="648" height="36" rx="6" fill="#0C447C"/>
+<rect x="16" y="40" width="648" height="12" fill="#0C447C"/>
+<text font-family="sans-serif" font-weight="600" font-size="13" x="34" y="38" fill="#ffffff" dominant-baseline="central">MVM-DATAINSIGHT</text>
+<text font-family="sans-serif" font-size="10" x="644" y="38" text-anchor="end" fill="#B5D4F4" dominant-baseline="central">Python · PyTorch · CrewAI · Streamlit · Render · GitHub</text>
+<text font-family="sans-serif" font-size="10" x="34" y="68" fill="#85B7EB">ADATFORRÁSOK</text>
+<rect x="36" y="76" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="83" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">MEKH</text>
+<rect x="140" y="76" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="187" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">HUPX</text>
+<rect x="244" y="76" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="291" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">ECB</text>
+<rect x="348" y="76" width="104" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="400" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">Open-Meteo</text>
+<rect x="462" y="76" width="94" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="509" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">ENTSO-E</text>
+<rect x="566" y="76" width="82" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="607" y="98" text-anchor="middle" fill="#ffffff" dominant-baseline="central">KSH</text>
+<line x1="36" y1="142" x2="644" y2="142" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="156" fill="#85B7EB">MODELLRÉTEG</text>
+<rect x="36" y="164" width="128" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="100" y="182" text-anchor="middle" fill="#ffffff" dominant-baseline="central">PyTorch V1</text>
+<text font-family="sans-serif" font-size="10" x="100" y="198" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">99,07% | MAE 49,55</text>
+<rect x="178" y="164" width="128" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="242" y="182" text-anchor="middle" fill="#ffffff" dominant-baseline="central">PyTorch V2</text>
+<text font-family="sans-serif" font-size="10" x="242" y="198" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">Szintetikus adat</text>
+<rect x="320" y="164" width="148" height="44" rx="4" fill="#0C6B4A" stroke="#68d391" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="394" y="182" text-anchor="middle" fill="#ffffff" dominant-baseline="central">Ensemble modell</text>
+<text font-family="sans-serif" font-size="10" x="394" y="198" text-anchor="middle" fill="#dcf4ec" dominant-baseline="central">99,41% | MAE 31,09 MWh</text>
+<rect x="482" y="164" width="152" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="558" y="182" text-anchor="middle" fill="#ffffff" dominant-baseline="central">CrewAI ágensek</text>
+<text font-family="sans-serif" font-size="10" x="558" y="198" text-anchor="middle" fill="#B5D4F4" dominant-baseline="central">Adat lekérés (API)</text>
+<line x1="164" y1="186" x2="176" y2="186" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow-mvm)"/>
+<line x1="306" y1="186" x2="318" y2="186" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow-mvm)"/>
+<line x1="468" y1="186" x2="480" y2="186" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow-mvm)"/>
+<line x1="83" y1="120" x2="83" y2="162" stroke="#378ADD" stroke-width="0.5" stroke-dasharray="2 2"/>
+<line x1="291" y1="120" x2="291" y2="162" stroke="#378ADD" stroke-width="0.5" stroke-dasharray="2 2"/>
+<line x1="509" y1="120" x2="509" y2="162" stroke="#378ADD" stroke-width="0.5" stroke-dasharray="2 2"/>
+<line x1="36" y1="228" x2="644" y2="228" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="242" fill="#85B7EB">DEPLOYMENT</text>
+<rect x="36" y="250" width="108" height="44" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="90" y="272" text-anchor="middle" fill="#ffffff" dominant-baseline="central">GitHub CI/CD</text>
+<line x1="144" y1="272" x2="172" y2="272" stroke="#378ADD" stroke-width="1" marker-end="url(#arrow-mvm)"/>
+<rect x="176" y="250" width="452" height="44" rx="4" fill="#0C6B4A" stroke="#68d391" stroke-width="1.5"/>
+<text font-family="sans-serif" font-weight="600" font-size="12" x="402" y="268" text-anchor="middle" fill="#ffffff" dominant-baseline="central">Render Dashboard — Streamlit</text>
+<text font-family="sans-serif" font-size="10" x="402" y="284" text-anchor="middle" fill="#dcf4ec" dominant-baseline="central">mvm-dashboard.onrender.com</text>
+<line x1="394" y1="208" x2="394" y2="248" stroke="#68d391" stroke-width="1" marker-end="url(#arrow-mvm)"/>
+<line x1="36" y1="314" x2="644" y2="314" stroke="#185FA5" stroke-width="0.5" stroke-dasharray="4 4"/>
+<text font-family="sans-serif" font-size="10" x="34" y="328" fill="#85B7EB">KIMENET — Vizualizáció</text>
+<rect x="36" y="336" width="195" height="36" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="133" y="354" text-anchor="middle" fill="#ffffff" dominant-baseline="central">7 napos előrejelzés (MWh)</text>
+<rect x="243" y="336" width="195" height="36" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="340" y="354" text-anchor="middle" fill="#ffffff" dominant-baseline="central">Energiaköltség (M Ft/nap)</text>
+<rect x="450" y="336" width="195" height="36" rx="4" fill="#0C447C" stroke="#378ADD" stroke-width="1"/>
+<text font-family="sans-serif" font-weight="600" font-size="11" x="547" y="354" text-anchor="middle" fill="#ffffff" dominant-baseline="central">Riasztás kártyák</text>
+</svg>
+  </div>
+</div>
+
+<!-- Adatbázisok -->
+<h2 class="mvm">📂 Adatbázisok</h2>
+<table class="csv-table mvm">
+  <tr><th>Fájlnév</th><th>Sorok</th><th>Tartalom</th><th>Felhasználás</th></tr>
+  <tr><td>mekh_havi_bruttofelhasznalás_2014_2024.csv</td><td>132</td><td>Országos bruttó havi fogyasztás MWh</td><td>Anomáliadetekció</td></tr>
+  <tr><td>rezsi_gap_KSH_2014_2024.csv</td><td>132</td><td>ESZ + Ker havi fogyasztás + rezsi-gap Ft</td><td>Rezsi-gap elemzés</td></tr>
+  <tr><td>napi_fogyasztas_2024_2025.csv</td><td>731</td><td>Napi fogyasztás MWh + hőmérséklet</td><td>Predikciós modell</td></tr>
+  <tr><td>hupx_dam_2024_2025.csv</td><td>731</td><td>HUPX napi DAM átlagár EUR/MWh</td><td>Predikciós modell</td></tr>
+  <tr><td>allami_rezsi_gap_2022_2024.csv</td><td>3</td><td>Éves állami kompenzáció milliárd Ft</td><td>Rezsi-gap trend</td></tr>
+</table>
+
+<div class="arrow">↓</div>
+
+<!-- I. MODUL -->
+<div class="modul mvm">
+  <h2 class="mvm" style="margin-top:0;">I. Modul — Adatgyűjtés és adatfeldolgozás</h2>
+  <h3>Technológia</h3>
+  <span class="tech-tag mvm">Python</span><span class="tech-tag mvm">pandas</span><span class="tech-tag mvm">openpyxl</span><span class="tech-tag mvm">Google Colab</span><span class="tech-tag mvm">KSH STADAT API</span><span class="tech-tag mvm">ECB API</span><span class="tech-tag mvm">ENTSO-E API</span>
+  <h3>Adatminőségi kihívások és megoldások</h3>
+  <ul>
+    <li><strong>Heterogén xlsx struktúra:</strong> MEKH háromszor változtatta a fájlformátumát 2014–2024 között → négy különböző beolvasó függvény</li>
+    <li><strong>Duplikált adatok:</strong> minden éves MEKH fájlban 2016-tól szerepelnek adatok → dátum szerinti szűrés</li>
+    <li><strong>Hiányzó 2024 december:</strong> a 2025-ös fájlban volt megtalálható → kereszt-fájl szűrés</li>
+    <li><strong>Windows 259 karakter limit:</strong> fájlok áthelyezésével megoldva</li>
+  </ul>
+  <div class="result mvm">Külső ellenőrzés: 2022-es <strong>45,76 TWh</strong> és 2023-as <strong>43,70 TWh</strong> egyezik a MAVIR publikált adataival.</div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- II. MODUL -->
+<div class="modul mvm">
+  <h2 class="mvm" style="margin-top:0;">II. Modul — Anomáliadetekció + Rezsi-gap trendelemzés</h2>
+  <h3>Technológia</h3>
+  <span class="tech-tag mvm">IQR</span><span class="tech-tag mvm">Isolation Forest</span><span class="tech-tag mvm">Random Forest</span><span class="tech-tag mvm">SMOTE</span><span class="tech-tag mvm">seaborn</span><span class="tech-tag mvm">matplotlib</span>
+  <h3>Anomáliadetekció – 3 módszer</h3>
+  <ul>
+    <li><strong>IQR</strong> → 3 anomália: 2020 október, 2021 július, 2021 október</li>
+    <li><strong>Isolation Forest</strong> → 14 anomália</li>
+    <li><strong>Random Forest + SMOTE</strong> → 89% pontosság, 80% recall</li>
+    <li><strong>Hárommódszer egyezés:</strong> 2021 július biztosan anomália (3 979 800 MWh, 24,3°C)</li>
+  </ul>
+  <div class="result mvm">Rezsi-gap összegek: <strong>2022: 402 Mrd Ft | 2023: 918 Mrd Ft (csúcsév) | 2024: 940 Mrd Ft</strong></div>
+  <div class="result mvm">Energia-ár olló csúcs: 2022-ben <strong>107 Ft/kWh</strong></div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- III. MODUL -->
+<div class="modul mvm">
+  <h2 class="mvm" style="margin-top:0;">III. Modul — Predikció | PyTorch Ensemble modell</h2>
+  <h3>Technológia</h3>
+  <span class="tech-tag mvm">PyTorch</span><span class="tech-tag mvm">nn.Linear</span><span class="tech-tag mvm">MSE loss</span><span class="tech-tag mvm">Adam optimizer</span><span class="tech-tag mvm">MinMaxScaler</span>
+
+  <h3>Modellek összehasonlítása</h3>
+  <p style="font-size:13px; color:#555; margin-bottom:10px;">Az összehasonlítás három klasszikus módszert mér az Ensemble PyTorch modellel szemben — ugyanazon 80/20 train/test felosztáson, időrendben. A naiv modellek a legegyszerűbb becsléseket alkalmazzák, a SARIMA klasszikus statisztikai idősor-módszer. Az Ensemble mindháromat jelentősen felülmúlja.</p>
+  <table class="csv-table mvm">
+    <tr><th>Modell</th><th>MAE (MWh)</th><th>Pontosság*</th><th>Jan. MAE</th><th>Megjegyzés</th></tr>
+    <tr><td>Naiv (holnap=ma)</td><td>250</td><td>95,28%</td><td>—</td><td>Baseline</td></tr>
+    <tr><td>Naiv (heti szezon)</td><td>351</td><td>93,39%</td><td>—</td><td>Baseline</td></tr>
+    <tr><td>SARIMA(1,1,1)(1,1,1,7)</td><td>1037</td><td>80,43%</td><td>—</td><td>Csak időbeli minta</td></tr>
+    <tr><td>V1</td><td>49,55</td><td>99,07%</td><td>124,63</td><td>Extrém hidegnél gyenge</td></tr>
+    <tr><td>V2</td><td>73,31</td><td>98,62%</td><td>68,28</td><td>Más hónapokban gyengébb</td></tr>
+    <tr style="background:#f0fff4;"><td><strong>Ensemble ✓</strong></td><td><strong>31,09</strong></td><td><strong>99,41%</strong></td><td><strong>30,56</strong></td><td>8× jobb a legjobb naivnál</td></tr>
+  </table>
+  <p style="font-size:12px; color:#666;">* Pontosság számítása: 100 − (MAE / átlagos napi fogyasztás × 100). Regressziós teljesítménymutató, nem klasszikus osztályozási accuracy.</p>
+
+  <h3>V2 — Szintetikus adataugmentáció</h3>
+  <ul>
+    <li>-5 és -7°C között: átlag -6,39°C / <strong>6 458 MWh</strong> (30 szintetikus sor)</li>
+    <li>-7°C alatt: átlag -8,70°C / <strong>6 513 MWh</strong> (30 szintetikus sor)</li>
+    <li>Valós átlagok alapján generált — nem kitalált értékek</li>
+  </ul>
+
+  <h3>Adat- és feature megjegyzések</h3>
+  <ul>
+    <li><strong>Hőmérséklet forrása tanításkor:</strong> MEKH historikus (utólagos mért) adat — éles futásnál Open-Meteo forecast API (7 napra előre elérhető)</li>
+    <li><strong>DAM árak:</strong> ENTSO-E API — ténylegesen előre ismertek a következő napra</li>
+    <li><strong>MinMaxScaler UserWarning:</strong> predikciónál numpy tömb helyett pandas DataFrame átadásával kiküszöbölhető — a pontosságot nem befolyásolta</li>
+    <li><strong>Negatív DAM árak:</strong> valós piaci jelenség (megújuló túltermelés) — a rendszer helyesen kezeli</li>
+  </ul>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- IV. MODUL -->
+<div class="modul mvm">
+  <h2 class="mvm" style="margin-top:0;">IV. Modul — Automatizált Előrejelző Rendszer</h2>
+  <h3>Technológia</h3>
+  <span class="tech-tag mvm">CrewAI</span><span class="tech-tag mvm">Streamlit</span><span class="tech-tag mvm">Plotly</span><span class="tech-tag mvm">Render</span><span class="tech-tag mvm">GitHub CI/CD</span><span class="tech-tag mvm">Open-Meteo API</span><span class="tech-tag mvm">ENTSO-E API</span><span class="tech-tag mvm">ECB API</span>
+  <h3>CrewAI ágensek</h3>
+  <ul>
+    <li><strong>Időjárás Adatgyűjtő:</strong> Open-Meteo API — Budapest, következő 7 nap hőmérséklet</li>
+    <li><strong>Energiatőzsdei Adatgyűjtő:</strong> ENTSO-E API — magyarországi DAM ár, 30 napos átlag</li>
+  </ul>
+  <h3>Dashboard kártyák</h3>
+  <ul>
+    <li>7 napos fogyasztás előrejelzés (MWh) — Ensemble modell</li>
+    <li>Becsült napi energiaköltség (Millió Ft) — ECB EUR/HUF árfolyammal</li>
+    <li>Hőmérséklet előrejelzés (°C)</li>
+    <li>Összesített kártyák: heti fogyasztás, csúcs, minimum, DAM ár, riasztás</li>
+  </ul>
+  <div class="result mvm"><em>Jövőbeli fejlesztés: adatbázis (pl. PostgreSQL) bevezetése megoldaná a historikus előrejelzések tárolását — Render platformon Google Drive hozzáférés nélkül ez nem megvalósítható.</em></div>
+</div>
+
+<!-- ═══════════════ RENDSZER ÖSSZEKÖTÉS ═══════════════ -->
+<div class="osszekoto" id="kapcsolat">
+  <h2 style="color:white; border-left:5px solid rgba(255,255,255,0.4); padding-left:12px; margin-top:0;">🔗 Rendszer összekötés — Az integrációs pont</h2>
+  <p>Amikor a menedzser e-mailben dashboard-ot vagy előrejelzést kér → Flowise <strong>DASHBOARD</strong> kategóriát rendel hozzá → az n8n Switch node automatikusan visszaküldi az <strong>MVM-DataInsight Render dashboard linkjét</strong> — emberi beavatkozás nélkül.</p>
+  <p>Konfabuláció mindkét szinten kizárva: Flowise csak az email szövege alapján kategorizál — a dashboard csak valós API adatokat jelenít meg.</p>
+</div>
+
+<!-- ═══════════════ IRODALOMJEGYZÉK ═══════════════ -->
+<div id="irodalom">
+<h1 class="sec">📖 Irodalomjegyzék és Felhasznált Eszközök</h1>
+
+<div style="background:#f0fff4; border:2px solid #0C6B4A; border-left:6px solid #0C6B4A; border-radius:6px; padding:14px 16px; margin:10px 0; font-size:13px;">
+  <strong style="color:#0C6B4A;">📚 Témavezető — elsődleges szakmai irányítás</strong><br><br>
+  <strong>Dr. Tornai Kálmán</strong> — dékánhelyettes, egyetemi docens<br>
+  Pázmány Péter Katolikus Egyetem, Információs Technológiai és Bionika Kar<br>
+  Mesterséges Intelligencia Alkalmazásai Szakirányú Továbbképzés, 2025–2026 tanév
+</div>
+
+<div style="background:#f9f9f9; border-radius:6px; padding:14px 16px; margin:8px 0; border:1px solid #ddd; font-size:13px;">
+  <strong>Adatforrások</strong><br>
+  MEKH: <a href="https://mekh.hu">mekh.hu</a> · HUPX: <a href="https://hupx.hu">hupx.hu</a> · ENTSO-E: <a href="https://transparency.entsoe.eu">transparency.entsoe.eu</a> · Open-Meteo: <a href="https://open-meteo.com">open-meteo.com</a> · ECB: <a href="https://data.ecb.europa.eu">data.ecb.europa.eu</a> · KSH STADAT 14.1.2.1: <a href="https://www.ksh.hu">ksh.hu</a>
+</div>
+
+<div style="background:#f9f9f9; border-radius:6px; padding:14px 16px; margin:8px 0; border:1px solid #ddd; font-size:13px;">
+  <strong>Felhasznált platformok és eszközök</strong><br>
+  Python 3.11 · PyTorch · scikit-learn · pandas · numpy · imbalanced-learn (SMOTE)<br>
+  Streamlit · Plotly · CrewAI · n8n Cloud · Flowise · GPT-4o-mini (OpenAI API)<br>
+  Google Colab · Google Drive · Google Sheets · Gmail API · Looker Studio<br>
+  Render · GitHub · ENTSO-E Python Client
+</div>
+
+<div style="background:#f9f9f9; border-radius:6px; padding:14px 16px; margin:8px 0; border:1px solid #ddd; font-size:13px;">
+  <strong>AI eszközhasználat nyilatkozat</strong><br>
+  A szakdolgozat és a projektek fejlesztése során <strong>Claude (Anthropic)</strong> és <strong>Microsoft 365 Copilot</strong> MI-t használtam konzultációs célra: rendszertervezés, kódgenerálás, hibakeresés és dokumentáció. Minden AI-generált tartalmat ellenőriztem, valós adatokon teszteltem és szükség esetén módosítottam. A tervezési döntések, az adatforrások kiválasztása, a modellek betanítása és a rendszerek üzemeltetése teljes egészében az én felelősségem.
+</div>
+
+<div style="background:#f9f9f9; border-radius:6px; padding:14px 16px; margin:8px 0; border:1px solid #ddd; font-size:13px;">
+  <strong>Élő rendszerek</strong><br>
+  MVM-DataInsight Dashboard: <a href="https://mvm-dashboard.onrender.com" target="_blank">https://mvm-dashboard.onrender.com</a><br>
+  GitHub Repository: <a href="https://github.com/magroandi28-lang" target="_blank">https://github.com/magroandi28-lang</a><br>
+  Enterprise AI Agent Hub — n8n workflow: saját n8n Cloud instance<br>
+  Enterprise AI Agent Hub — Flowise chatflow: saját Flowise instance
+</div>
+</div>
+
+<script>
+// ═══ N8N WORKFLOW 1 NODE ADATOK ═══
+const nodeData = {
+  'schedule1': { title: '⏰ Schedule Trigger', desc: 'Ütemezett időzítőként indítja el a workflow-t 60 percenként — emberi beavatkozás nélkül.', params: [{ label: 'Trigger típus', val: 'Interval / Cron' },{ label: 'Futási frekvencia', val: '60 percenként' },{ label: 'Szerepe', val: 'Pipeline belépési pont' }] },
+  'getmany': { title: '📧 Get many messages', desc: 'Lekéri az összes új e-mailt — csak a "Feldolgozva" label nélkülieket dolgozza fel.', params: [{ label: 'Művelet', val: 'Get Messages' },{ label: 'From', val: 'menagermvmprojetk@gmail.com' },{ label: 'Label filter', val: '-label:Feldolgozva' },{ label: 'Auth', val: 'Gmail API (OAuth2)' }] },
+  'getone': { title: '📧 Get a message', desc: 'Az előző node Message ID alapján lekéri az e-mail teljes tartalmát. Simplify bekapcsolva.', params: [{ label: 'Resource', val: 'Message' },{ label: 'Operation', val: 'Get' },{ label: 'Message ID', val: '{{ $json.id }}' },{ label: 'Simplify', val: '✅ Be (csak releváns mezők)' }] },
+  'http': { title: '🌐 HTTP Request — Flowise API', desc: 'POST kérést küld a Flowise chatflow API endpointjára. Az e-mail szövegét küldi, visszakapja az AI elemzést (JSON).', params: [{ label: 'Method', val: 'POST' },{ label: 'URL', val: 'cloud.flowiseai.com/api/v1/prediction/...' },{ label: 'Body param', val: 'question = subject + snippet' },{ label: 'Timeout', val: '30000 ms' }] },
+  'editfields': { title: '✏️ Edit Fields', desc: 'A Flowise JSON válaszát szétbontja és strukturált mezőkbe rendezi a Sheets-be íráshoz.', params: [{ label: 'Datum', val: '{{ $now.format("yyyy.MM.dd HH:mm") }}' },{ label: 'Feladat_tipusa', val: '{{ JSON.parse($json.text).Feladat_tipusa }}' },{ label: 'Prioritas', val: '{{ JSON.parse($json.text).Prioritas }}' },{ label: 'Statusz', val: 'FELDOLGOZÁSRA VÁR' }] },
+  'sheets': { title: '📊 EMAILEK_FELADATOK — Google Sheets', desc: 'Az Edit Fields által előkészített adatokat hozzáfűzi a Google Sheets táblázathoz.', params: [{ label: 'Operation', val: 'Append Row' },{ label: 'Sheet', val: 'EMAILEK_FELADATOK' },{ label: 'Auth', val: 'Service Account (least privilege)' },{ label: 'Oszlopok', val: 'Datum · Felado · Feladat_tipusa · Prioritas · Kivonat · Statusz' }] },
+  'switchnode': { title: '⚡ Switch — Routing Rules', desc: 'Rules módban működik — két explicit routing rule, a többi a Fallback ágon folytatódik.', params: [{ label: '1. szabály', val: 'Feladat_tipusa = DASHBOARD' },{ label: '2. szabály', val: 'Prioritas = Magas' },{ label: 'Fallback', val: 'Extra Output (minden egyéb)' },{ label: 'Mode', val: 'Rules' }] },
+  'automata': { title: '📧 AUTOMATA_VÁLASZ', desc: 'Automatikus visszaigazoló emailt küld. A prioritás, típus és kivonat dinamikusan kerül bele.', params: [{ label: 'To', val: 'menagermvmprojetk@gmail.com' },{ label: 'Subject', val: 'Automata válasz - Feldolgozás alatt' },{ label: 'Tartalom', val: 'Prioritás + Típus + Kivonat + Státusz' }] },
+  'dashboard': { title: '📊 DASHBOARD — HTML riport', desc: 'DASHBOARD kategória esetén az MVM-DataInsight Render dashboard linkjét küldi vissza az eredeti feladónak.', params: [{ label: 'To', val: "{{ $('Edit Fields').item.json.Felado }}" },{ label: 'Email Type', val: 'HTML' },{ label: 'Tartalom', val: 'MVM dashboard link + magyarázat' }] },
+  'cimkezo': { title: '🏷️ CIMKEZO — Gmail label', desc: 'Minden feldolgozott e-mailre ráteszi a "Feldolgozva" labelt. Így nem kerül újra feldolgozásra.', params: [{ label: 'Operation', val: 'Add Label' },{ label: 'Message ID', val: "{{ $('Get many messages').item.json.id }}" },{ label: 'Label', val: 'Feldolgozva' }] },
+  'hibajegy': { title: '📋 HIBAJEGY_NODE', desc: 'Hiba esetén rögzíti a sikertelen feldolgozást egy külön Sheets dokumentumban.', params: [{ label: 'Sheet', val: 'HIBAJEGY' },{ label: 'DATUM', val: "{{ $now.format('yyyy.MM.dd HH:mm') }}" },{ label: 'NODE', val: "{{ $input.first().json.error?.node }}" },{ label: 'STATUSZ', val: 'Nyitott' }] },
+  'sendmsg': { title: '📧 HIBA_ÉRTESÍTŐ', desc: 'Ha hiba történt, értesítő emailt küld a rendszer gazdájának azonnali beavatkozáshoz.', params: [{ label: 'To', val: 'varga.andrea.job@gmail.com' },{ label: 'Subject', val: '🚨 Hiba a rendszerben!' },{ label: 'Email Type', val: 'HTML' }] }
+};
+
+const briefingData = {
+  'b-schedule': { title: '⏰ Schedule Trigger — Napi briefing', desc: 'Naponta egyszer automatikusan elindítja a Worker Briefing workflow-t.', params: [{ label: 'Időpont', val: 'Naponta reggel (pl. 07:00)' },{ label: 'Kapcsolódó adat', val: 'EMAILEK_FELADATOK Sheets' }] },
+  'b-sheets': { title: '📊 Get row(s) — EMAILEK_FELADATOK', desc: 'Az EMAILEK_FELADATOK táblából olvassa ki a feldolgozásra váró és folyamatban lévő sorokat.', params: [{ label: 'Filter 1', val: 'Statusz = FELDOLGOZÁSRA VÁR' },{ label: 'Filter 2', val: 'Statusz = FOLYAMATBAN' },{ label: 'Combine', val: 'OR' }] },
+  'b-js': { title: '{} Code in JavaScript — Feladatlista', desc: 'HTML formátumú feladatlistát állít össze a napi briefing emailhez.', params: [{ label: 'Mode', val: 'Run Once for All Items' },{ label: 'Input', val: '$input.all() — összes Sheets sor' },{ label: 'Output', val: '{ lista: HTML, darab: count }' }] },
+  'b-send': { title: '📧 Send — Napi MI Briefing', desc: 'Elküldi a napi feladatlista emailt HTML formátumban.', params: [{ label: 'To', val: 'varga.andrea.job@gmail.com' },{ label: 'Subject', val: 'Napi MI Briefing: {{ $json.darab }} feladat' },{ label: 'Email Type', val: 'HTML' }] }
+};
+
+const flowiseData = {
+  'openai': { title: '🤖 OpenAI — GPT-4o-mini', desc: 'A Flowise chatflow Language Model komponense. Temperature=0 garantálja a konzisztens, determinisztikus outputot.', content: `<div class="detail-grid"><div class="detail-item"><label>Model</label><div class="val">gpt-4o-mini (latest)</div></div><div class="detail-item"><label>Temperature</label><div class="val">0 (determinisztikus)</div></div></div><p style="font-size:13px;color:#555;margin-top:12px;"><strong>Miért Temperature=0?</strong> Üzleti kategorizálásnál a konzisztencia kritikus — ugyanazt az e-mailt minden futáskor ugyanúgy kell besorolni.</p>` },
+  'llmchain': { title: '🔗 LLM Chain', desc: 'Összeköti az OpenAI modellt és a Prompt Template-t egyetlen feldolgozási lánccá.', content: `<div class="detail-grid"><div class="detail-item"><label>Input 1</label><div class="val">Language Model (ChatOpenAI)</div></div><div class="detail-item"><label>Input 2</label><div class="val">Prompt Template</div></div><div class="detail-item"><label>Output</label><div class="val">Strukturált JSON szöveg</div></div></div>` },
+  'prompt': {
+    title: '📝 Prompt Template — Az AI viselkedés tervezése',
+    desc: 'Ez a Prompt Engineering tantárgy legközvetlenebb alkalmazása. A template meghatározza az AI szerepét, feladatát, az elvárt output struktúráját és a kategorizálás logikáját.',
+    content: `<div class="prompt-box"><span class="ps">Te egy MVM-DataInsight automatizációs asszisztens vagy.</span>
+Elemezd a bejövő e-mailt: <span class="pv">{question}</span>.
+
+<span class="ps">TASKS:</span>
+<span class="pk">Feladat_tipusa:</span> Határozd meg a kategóriát az alábbiak közül:
+   <span class="pv">STATISZTIKA</span>: adatelemzés, boxplot, kimutatás, fogyasztási adatok, benchmark összehasonlítás, MEKH adat
+   <span class="pv">PREDIKCIÓ</span>: előrejelzés, modellépítés, jóslás, trendek, PyTorch, neurális háló
+   <span class="pv">ANOMÁLIA</span>: kiugró értékek, anomáliadetekció, hibás adatok, outlierek, szokatlan fogyasztás
+   <span class="pv">DASHBOARD</span>: dashboard, vizualizáció, Render, Streamlit, interaktív felület, bemutató, riport
+   <span class="pv">ÁLTALÁNOS</span>: adminisztráció, megbeszélés, egyéb kérés ami nem illik a fenti kategóriákba
+
+<span class="pk">Prioritas:</span> Az alábbiak közül PONTOSAN egyet válassz:
+   <span class="pv">Sürgős</span>: azonnali beavatkozást igényel, határidős, kritikus, "azonnal", "ma kell"
+   <span class="pv">Magas</span>: fontos de nem azonnali, vezetői kérés, "fontos", "kérem mielőbb"
+   <span class="pv">Normál</span>: rutin feladat, nincs időnyomás
+
+<span class="pk">Kivonat:</span> Rövid cím a feladatnak (max 5 szó).
+<span class="pk">Osszefoglalva:</span> Egy mondatos tömör összefoglaló a levél lényegéről.
+
+<span class="ps">CONSTRAINTS:</span>
+<span class="pc">Csak és kizárólag nyers JSON-t válaszolj! Nincs szöveg köré.</span>
+<span class="pc">A 'Feladat_tipusa' értéke KIZÁRÓLAG: STATISZTIKA, PREDIKCIÓ, ANOMÁLIA, DASHBOARD, ÁLTALÁNOS.</span>
+<span class="pc">Tilos ragozni vagy más szót használni!</span>
+<span class="pc">A 'Prioritas' értéke KIZÁRÓLAG: Sürgős, Magas, Normál. Tilos más szót használni!</span>
+<span class="pc">NE használj markdown kód blokkot! Kizárólag nyers JSON-t adj vissza, backtick nélkül!</span>
+
+<span class="ps">OUTPUT FORMAT:</span>
+{
+  <span class="pv">"Feladat_tipusa"</span>: <span class="pk">"STATISZTIKA|PREDIKCIÓ|ANOMÁLIA|DASHBOARD|ÁLTALÁNOS"</span>,
+  <span class="pv">"Prioritas"</span>: <span class="pk">"Sürgős|Magas|Normál"</span>,
+  <span class="pv">"Kivonat"</span>: <span class="pk">"max 5 szó"</span>,
+  <span class="pv">"Osszefoglalva"</span>: <span class="pk">"egy mondatos összefoglaló"</span>
+}</div>
+    <p style="font-size:12px; color:#666; margin-top:8px;"><em>A <strong>{question}</strong> placeholder helyére az n8n HTTP Request node az aktuális e-mail szövegét helyettesíti be minden futáskor. A Temperature=0 beállítás garantálja hogy az output mindig pontosan a megadott JSON struktúrát követi.</em></p>`
+  }
+};
+
+// Auth flow adatok
+const authData = {
+  'user': { title: '👤 Felhasználó (Varga Andrea)', body: 'A rendszer tulajdonosa. Ő adja meg az első OAuth2 hozzájárulást a Google fiókjához — ez egyszeri lépés. Ezután az n8n tárolja a refresh tokent és automatikusan megújítja.' },
+  'google': { title: '🔑 Google Authorization Server', body: 'Kezeli az OAuth2 folyamatot. Ellenőrzi a felhasználó hozzájárulását, kiadja az access tokent (rövid életű) és a refresh tokent (hosszú életű). Az access token érvényessége ~1 óra.' },
+  'n8n': { title: '⚡ n8n Workflow Engine', body: 'Tárolja a refresh tokent és automatikusan megújítja az access tokent. Service Account JSON kulcsot használ a Sheets hozzáféréshez. Flowise API kulcsot HTTP header-ben küld.' },
+  'gmail': { title: '📧 Gmail API (OAuth2)', body: 'Felhasználói fiókhoz kötött műveletek: emailek olvasása, küldése, label-ek kezelése. Az OAuth2 scope pontosan meghatározza, hogy az n8n mit tehet a felhasználó nevében.' },
+  'sheets': { title: '📊 Google Sheets API (Service Account)', body: 'Szerver-szerver kommunikáció — a Service Account (n8n-agent-bot@enterprise-ai-agent-hub.iam.gserviceaccount.com) csak a szükséges Sheets dokumentumokhoz fér hozzá. Emailekhez NEM fér hozzá — least privilege elv.' },
+  'step1': { title: '① Auth kérés', body: 'Az n8n átirányítja a felhasználót a Google OAuth2 consent oldalára. Megadja a kért scope-okat (gmail.readonly, gmail.send, gmail.labels).' },
+  'step2': { title: '② Felhasználói hozzájárulás', body: 'A felhasználó (Varga Andrea) megnézi a kért jogosultságokat és jóváhagyja. Ez egyszeri lépés — utána az n8n automatikusan kezeli a tokeneket.' },
+  'step3': { title: '③ Token kiadás', body: 'A Google Auth Server kiad egy rövid életű access tokent (~1 óra) és egy hosszú életű refresh tokent. Az n8n tárolja a refresh tokent és automatikusan megújítja az access tokent.' },
+  'step4': { title: '④ API hívás tokennel', body: 'Az n8n az access tokent Authorization Bearer headerben küldi minden Gmail API híváshoz. A token érvényességét automatikusan ellenőrzi.' },
+  'step5': { title: '⑤ Gmail API hívás', body: 'Az n8n OAuth2 tokennel hívja a Gmail API-t: emailek olvasása, küldése, labelek kezelése a felhasználó nevében — de csak a megadott scope-on belül.' },
+  'step6': { title: '⑥ Sheets API hívás', body: 'A Service Account JSON kulcsával hívja a Sheets API-t — ez teljesen independent az OAuth2 folyamattól. A Service Account csak a megosztott Sheets dokumentumhoz fér hozzá.' }
+};
+
+function showDetail(nodeId) {
+  const data = nodeData[nodeId];
+  if (!data) return;
+  document.querySelectorAll('.n8n-node').forEach(n => n.classList.remove('selected'));
+  document.getElementById('detail-title-1').textContent = data.title;
+  document.getElementById('detail-desc-1').textContent = data.desc;
+  document.getElementById('detail-grid-1').innerHTML = data.params.map(p => `<div class="detail-item"><label>${p.label}</label><div class="val">${p.val}</div></div>`).join('');
+  document.getElementById('detail-panel-1').classList.add('visible');
+}
+function showDetail2(nodeId) {
+  const data = briefingData[nodeId];
+  if (!data) return;
+  document.getElementById('detail-title-2').textContent = data.title;
+  document.getElementById('detail-desc-2').textContent = data.desc;
+  document.getElementById('detail-grid-2').innerHTML = data.params.map(p => `<div class="detail-item"><label>${p.label}</label><div class="val">${p.val}</div></div>`).join('');
+  document.getElementById('detail-panel-2').classList.add('visible');
+}
+function showFlowiseDetail(nodeId) {
+  const data = flowiseData[nodeId];
+  if (!data) return;
+  document.getElementById('flowise-detail-title').textContent = data.title;
+  document.getElementById('flowise-detail-desc').textContent = data.desc;
+  document.getElementById('flowise-detail-content').innerHTML = data.content;
+  document.getElementById('flowise-detail-panel').classList.add('visible');
+}
+function closeDetail(panel) {
+  document.getElementById('detail-panel-' + panel).classList.remove('visible');
+  document.querySelectorAll('.n8n-node').forEach(n => n.classList.remove('selected'));
+}
+function showAuth(key) {
+  const d = authData[key];
+  if (!d) return;
+  document.getElementById('auth-detail-title').textContent = d.title;
+  document.getElementById('auth-detail-body').textContent = d.body;
+  document.getElementById('auth-detail').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
