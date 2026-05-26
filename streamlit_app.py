@@ -519,7 +519,7 @@ st.markdown("""
             </div>
             <div style="font-family:Inter,sans-serif; font-size:13px;
                         color:#93c5fd; margin-top:4px; letter-spacing:0.5px;">
-                CrewAI + PyTorch Ensemble modell &nbsp;|&nbsp; 7 napos előrejelzés &nbsp;|&nbsp; V1 + V2
+                CrewAI + PyTorch Ensemble (V1 + V2) &nbsp;|&nbsp; 7 napos előrejelzés &nbsp;|&nbsp; Azure PostgreSQL
             </div>
         </div>
     </div>
