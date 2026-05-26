@@ -9,6 +9,8 @@ import holidays
 import requests
 import os
 import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 from io import StringIO
 from entsoe import EntsoePandasClient
@@ -100,6 +102,7 @@ RIADOKUSZOB = 6812.0
 LAG_KEZDO = 4796.52
 hu_holidays = holidays.Hungary(years=[2026, 2027])
 ENTSOE_API_KEY = os.environ.get("ENTSOE_API_KEY", "")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 # ── MODELL DEFINÍCIÓ ─────────────────────────────────────────────
@@ -134,6 +137,67 @@ scaler_X_v1, scaler_y_v1, model_v1, scaler_X_v2, scaler_y_v2, model_v2 = modelle
 def magyar_ma():
     """Mindig a magyar időzóna szerinti aktuális dátumot adja vissza."""
     return pd.Timestamp.now(tz="Europe/Budapest").normalize().tz_localize(None).to_pydatetime()
+
+# ── ADATBÁZIS FÜGGVÉNYEK (ÚJ) ────────────────────────────────────
+def ments_db_be(eredmenyek, eur_huf):
+    """A 7 napos jóslatot bementi az Azure PostgreSQL adatbázisba."""
+    if not DATABASE_URL:
+        return False, "DATABASE_URL környezeti változó nincs beállítva"
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        ma = pd.Timestamp.now(tz="Europe/Budapest").date()
+        # Először töröljük a mai napon készült korábbi mentéseket (idempotens)
+        cur.execute("DELETE FROM predikciok WHERE joslas_datuma = %s", (ma,))
+        for e in eredmenyek:
+            koltseg = e["fogyasztas"] * e["dam_ar"] * eur_huf / 1_000_000
+            cur.execute("""
+                INSERT INTO predikciok 
+                (joslas_datuma, cel_datuma, fogyasztas_mwh, homerseklet, 
+                 dam_ar, koltseg_mft, modell, riado, eur_huf)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (ma, e["datum"].date(), float(e["fogyasztas"]), float(e["homerseklet"]),
+                  float(e["dam_ar"]), float(koltseg), e["modell"], bool(e["riado"]), float(eur_huf)))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True, f"{len(eredmenyek)} sor sikeresen mentve"
+    except Exception as ex:
+        return False, f"Hiba: {str(ex)}"
+
+def olvas_db_bol(datum_str):
+    """Egy adott napon készített jóslatokat olvas vissza az adatbázisból."""
+    if not DATABASE_URL:
+        return None, "DATABASE_URL nincs beállítva"
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM predikciok 
+            WHERE joslas_datuma = %s 
+            ORDER BY cel_datuma
+        """, (datum_str,))
+        sorok = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(s) for s in sorok], None
+    except Exception as ex:
+        return None, str(ex)
+
+def db_osszes_datum():
+    """Visszaadja az összes egyedi jóslási dátumot."""
+    if not DATABASE_URL:
+        return []
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT joslas_datuma FROM predikciok ORDER BY joslas_datuma DESC")
+        datumok = [str(r[0]) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return datumok
+    except:
+        return []
 
 # ── API LEKÉRÉSEK ────────────────────────────────────────────────
 @st.cache_data(ttl=300)
@@ -266,19 +330,16 @@ body {{ background:#0a1628; overflow:hidden; }}
     var chartEl = document.getElementById('{chart_id}');
     var animated = false;
 
-    // ── BEÁLLÍTÁSOK ──
-    var START_DELAY = 500;       // 500ms várakozás indítás előtt
-    var ANIM_DURATION = 2500;    // 2.5 másodperc animáció
-    var FRAME_RATE = 60;         // 60 fps
-    var TOTAL_STEPS = Math.round(ANIM_DURATION * FRAME_RATE / 1000);  // ~150 lépés
-    var FRAME_INTERVAL = 1000 / FRAME_RATE;  // ~16.67ms
+    var START_DELAY = 500;
+    var ANIM_DURATION = 2500;
+    var FRAME_RATE = 60;
+    var TOTAL_STEPS = Math.round(ANIM_DURATION * FRAME_RATE / 1000);
+    var FRAME_INTERVAL = 1000 / FRAME_RATE;
 
-    // Nullázott kezdőadatok (minden Y érték = 0)
     function makeStartData() {{
         return finalData.map(function(trace) {{
             var t = JSON.parse(JSON.stringify(trace));
             if (t.y) t.y = t.y.map(function() {{ return 0; }});
-            // A szövegfeliratokat is rejtjük el animáció közben
             if (t.text) {{
                 t._origText = t.text;
                 t.text = t.text.map(function() {{ return ''; }});
@@ -287,66 +348,46 @@ body {{ background:#0a1628; overflow:hidden; }}
         }});
     }}
 
-    // ── EASING FÜGGVÉNY: easeOutBack (kicsi túllendülés a végén) ──
-    function easeOutBack(t) {{
-        var c1 = 1.70158;
-        var c3 = c1 + 1;
-        return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-    }}
-
-    // ── easeOutCubic (smooth, no overshoot) — bar charthoz biztonságosabb ──
     function easeOutCubic(t) {{
         return 1 - Math.pow(1 - t, 3);
     }}
 
-    // Animáció lépésenként
     function runAnimation() {{
         if (animated) return;
         animated = true;
-
-        // Fade in a chart (opacity 0 → 1)
         chartEl.classList.add('fade-in');
-
         var current = 0;
         var timer = setInterval(function() {{
             current++;
             var t = current / TOTAL_STEPS;
             var eased = easeOutCubic(t);
-
             var animData = finalData.map(function(trace) {{
                 var copy = JSON.parse(JSON.stringify(trace));
                 if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
-                // A felirat csak akkor jelenjen meg, amikor majdnem kész (90%+)
                 if (copy.text && t < 0.9) {{
                     copy.text = copy.text.map(function() {{ return ''; }});
                 }}
                 return copy;
             }});
-
             Plotly.react('{chart_id}', animData, layout, config);
-
             if (current >= TOTAL_STEPS) {{
                 clearInterval(timer);
-                // Végállapot: pontosan az eredeti adatok
                 Plotly.react('{chart_id}', finalData, layout, config);
             }}
         }}, FRAME_INTERVAL);
     }}
 
-    // ── INDÍTÁS ──
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
         if ('IntersectionObserver' in window) {{
             var observer = new IntersectionObserver(function(entries) {{
                 entries.forEach(function(entry) {{
                     if (entry.isIntersecting && !animated) {{
-                        // 500ms delay, hogy a felhasználó észrevegye az indulást
                         setTimeout(runAnimation, START_DELAY);
                     }}
                 }});
             }}, {{threshold: 0.1}});
             observer.observe(chartEl);
         }} else {{
-            // Fallback régi böngészőkre
             setTimeout(runAnimation, START_DELAY);
         }}
     }});
@@ -359,42 +400,30 @@ body {{ background:#0a1628; overflow:hidden; }}
 def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=420):
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
     feliratok = [f"{v:,.0f} ({m})".replace(",", " ") for v, m in zip(fogyasztasok, modellek)]
-
-    # FIX: 18 órás padding mindkét oldalon (konzisztens a többi chartal)
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
-
     adatok = json.dumps([{
-        "type": "bar",
-        "x": datumok,
-        "y": fogyasztasok,
+        "type": "bar", "x": datumok, "y": fogyasztasok,
         "marker": {"color": colors, "opacity": 0.9},
-        "text": feliratok,
-        "textposition": "outside",
+        "text": feliratok, "textposition": "outside",
         "textfont": {"color": "#ffffff", "size": 11},
         "hovertemplate": "%{x}<br>%{text}<extra></extra>",
-        "name": "Fogyasztás",
-        "cliponaxis": False
+        "name": "Fogyasztás", "cliponaxis": False
     }])
-
     layout = json.dumps({
-        "paper_bgcolor": "#0a1628",
-        "plot_bgcolor": "#0f2040",
+        "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": "7 napos fogyasztás előrejelzés (MWh)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        # FIX: konzisztens margin a többi chartal
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "MWh", "color": "#cbd5e1",
                   "range": [0, max(fogyasztasok) * 1.25]},
-        "bargap": 0.55,
-        "showlegend": False,
+        "bargap": 0.55, "showlegend": False,
         "shapes": [{"type": "line", "xref": "paper", "x0": 0, "x1": 1,
                     "y0": RIADOKUSZOB, "y1": RIADOKUSZOB,
                     "line": {"color": "#FF6600", "width": 2, "dash": "dash"}}],
-        # FIX: xref:paper, így mindig középre kerül, nem lóg ki
         "annotations": [{"xref": "paper", "x": 0.5, "y": RIADOKUSZOB,
                          "text": "Riasztási küszöb (6 812 MWh)",
                          "showarrow": False, "font": {"color": "#FF6600", "size": 10},
@@ -404,38 +433,27 @@ def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=42
     return plotly_chart(adatok, layout, "fogyasztas", height)
 
 def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
-    # FIX: 18 órás padding mindkét oldalon (volt 12)
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
-
     adatok = json.dumps([{
-        "type": "scatter",
-        "x": datumok,
-        "y": koltsegek,
+        "type": "scatter", "x": datumok, "y": koltsegek,
         "mode": "lines+markers+text",
         "line": {"color": "#FF6600", "width": 3},
         "marker": {"size": 10, "color": "#FF6600", "line": {"color": "#ffffff", "width": 2}},
-        "fill": "tozeroy",
-        "fillcolor": "rgba(255,102,0,0.15)",
+        "fill": "tozeroy", "fillcolor": "rgba(255,102,0,0.15)",
         "text": [f"{v:.1f}" for v in koltsegek],
-        # FIX: minden pont top center (egységes), a margin és range gondoskodik a helyről
         "textposition": "top center",
         "textfont": {"color": "#ffffff", "size": 10},
         "hovertemplate": "%{x}<br>%{y:.1f} M Ft<extra></extra>",
-        "name": "Költség",
-        "cliponaxis": False
+        "name": "Költség", "cliponaxis": False
     }])
-
     y_min = min(koltsegek) * 0.80
     y_max = max(koltsegek) * 1.20
-
     layout = json.dumps({
-        "paper_bgcolor": "#0a1628",
-        "plot_bgcolor": "#0f2040",
+        "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": f"Becsült napi energiaköltség (M Ft) | EUR/HUF: {eur_huf:.1f}",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        # FIX: bal/jobb margin szélesítve 80/30 → 100/80 (felirat befér)
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
@@ -446,35 +464,25 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
     return plotly_chart(adatok, layout, "koltseg", height)
 
 def homerseklet_chart(datumok, homersekletek, height=420):
-    # FIX: 18 órás padding mindkét oldalon
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
-
     adatok = json.dumps([{
-        "type": "scatter",
-        "x": datumok,
-        "y": homersekletek,
+        "type": "scatter", "x": datumok, "y": homersekletek,
         "mode": "lines+markers+text",
         "line": {"color": "#10b981", "width": 3},
         "marker": {"size": 10, "color": "#10b981", "line": {"color": "#ffffff", "width": 2}},
-        "fill": "tozeroy",
-        "fillcolor": "rgba(16,185,129,0.15)",
+        "fill": "tozeroy", "fillcolor": "rgba(16,185,129,0.15)",
         "text": [f"{v:.1f}°" for v in homersekletek],
-        # FIX: minden pont top center, margin és range padding gondoskodik a helyről
         "textposition": "top center",
         "textfont": {"color": "#ffffff", "size": 10},
         "hovertemplate": "%{x}<br>%{y:.1f}°C<extra></extra>",
-        "name": "Hőmérséklet",
-        "cliponaxis": False
+        "name": "Hőmérséklet", "cliponaxis": False
     }])
-
     layout = json.dumps({
-        "paper_bgcolor": "#0a1628",
-        "plot_bgcolor": "#0f2040",
+        "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
         "title": {"text": "Hőmérséklet előrejelzés (°C)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
-        # FIX: bal/jobb margin szélesítve 80/30 → 100/80
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
@@ -532,13 +540,12 @@ with tab1:
         get_eur_huf.clear()
         get_idojaras.clear()
         get_dam_ar.clear()
-        for key in ["eredmenyek", "eur_huf", "dam_ar_1nap", "dam_atlag_30", "dam_valodi"]:
+        for key in ["eredmenyek", "eur_huf", "dam_ar_1nap", "dam_atlag_30", "dam_valodi", "db_mentes_uzenet"]:
             st.session_state.pop(key, None)
         st.rerun()
 
     if "eredmenyek" not in st.session_state:
         with st.spinner("Adatok lekérése..."):
-            # FIX: dátum-óra kulcs a cache-be → óránként új lekérés
             ora_kulcs = magyar_ma().strftime("%Y-%m-%d-%H")
             eur_huf = get_eur_huf(_datum_kulcs=ora_kulcs)
             idojaras_lista = get_idojaras(datum_kulcs=ora_kulcs)
@@ -550,10 +557,30 @@ with tab1:
             st.session_state.dam_atlag_30 = dam_atlag_30
             st.session_state.dam_valodi = dam_valodi
             st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
+            # ÚJ: Automatikus mentés az adatbázisba (egyszer a session-en belül)
+            siker, uzenet = ments_db_be(eredmenyek, eur_huf)
+            st.session_state.db_mentes_uzenet = (siker, uzenet)
 
     if "frissites_ideje" in st.session_state:
-        # FIX: Csak utolsó frissítés időpont, garantáltan magyar idő szerint
         allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
+
+    # ÚJ: Adatbázis mentés státusz megjelenítése
+    if "db_mentes_uzenet" in st.session_state:
+        siker, uzenet = st.session_state.db_mentes_uzenet
+        if siker:
+            st.markdown(f"""
+            <div style="background:#0a1628; border:1px solid #10b981; border-radius:8px;
+                        padding:8px 16px; margin-bottom:12px; text-align:center;">
+                <span style="color:#10b981; font-weight:600; font-family:Montserrat,sans-serif;">
+                💾 Adatbázis: {uzenet}</span>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background:#0a1628; border:1px solid #FF6600; border-radius:8px;
+                        padding:8px 16px; margin-bottom:12px; text-align:center;">
+                <span style="color:#FF6600; font-weight:600; font-family:Montserrat,sans-serif;">
+                ⚠️ Adatbázis: {uzenet}</span>
+            </div>""", unsafe_allow_html=True)
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
@@ -591,7 +618,6 @@ with tab1:
             🤖 {modell_szoveg}</span>
         </div>""", unsafe_allow_html=True)
 
-        # ── TREND SZÁMÍTÁS (FIX: első 3 nap átlaga vs utolsó 3 nap átlaga) ──
         elso3_fog = sum(fogyasztasok[:3]) / 3
         utolso3_fog = sum(fogyasztasok[-3:]) / 3
         trend_fog = "▲" if utolso3_fog > elso3_fog else "▼"
@@ -609,7 +635,6 @@ with tab1:
         riado_szin = "#FF6600" if riado_napok else "#10b981"
         riado_ikon = "🚨" if riado_napok else "✅"
 
-        # Trend tooltipek számítása (egérrel ráhúzva mutatja a magyarázatot)
         fog_valt = ((utolso3_fog - elso3_fog) / elso3_fog) * 100
         kolt_valt = ((utolso3_kolt - elso3_kolt) / elso3_kolt) * 100
         dam_valt = ((dam_ar_1nap - dam_atlag_30) / dam_atlag_30) * 100
@@ -618,63 +643,50 @@ with tab1:
         tooltip_kolt = f"Heti költség trend: első 3 nap átlaga ({elso3_kolt:.1f} M Ft) vs utolsó 3 nap átlaga ({utolso3_kolt:.1f} M Ft), változás: {kolt_valt:+.1f}%"
         tooltip_dam = f"DAM ár vs 30 napos átlag: holnapi ({dam_ar_1nap:.2f}) vs 30 napos ({dam_atlag_30:.2f} EUR/MWh), változás: {dam_valt:+.1f}%"
 
-        # ── KÁRTYÁK (FIX: <div>-ek, hover effekt, trend tooltipek) ──
         st.markdown(f"""
         <div class="kartya-sor">
-
           <div class="kartya">
             <div class="kartya-cim">⚡ Heti fogyasztás</div>
             <div class="kartya-ertek">{heti_fogyasztas:,.0f} MWh</div>
             <div class="kartya-trend" style="color:{trend_fog_szin};" title="{tooltip_fog}">{trend_fog} heti trend</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">💰 Heti költség</div>
             <div class="kartya-ertek">{heti_koltseg:.1f} M Ft</div>
             <div class="kartya-trend" style="color:{trend_koltseg_szin};" title="{tooltip_kolt}">{trend_koltseg} heti trend</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">📈 Csúcs</div>
             <div class="kartya-ertek">{max_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{max_nap['datum'].strftime('%m.%d')}</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">📉 Minimum</div>
             <div class="kartya-ertek">{min_nap['fogyasztas']:,.0f} MWh</div>
             <div class="kartya-sub">{min_nap['datum'].strftime('%m.%d')}</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">🏦 DAM valódi</div>
             <div class="kartya-ertek">{dam_ar_1nap:.2f} EUR/MWh</div>
             <div class="kartya-trend" style="color:{trend_dam_szin};" title="{tooltip_dam}">{trend_dam} vs 30 napos</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">🏦 DAM 30 napos</div>
             <div class="kartya-ertek">{dam_atlag_30:.2f} EUR/MWh</div>
             <div class="kartya-sub">30 napos átlag</div>
           </div>
-
           <div class="kartya">
             <div class="kartya-cim">💱 EUR/HUF</div>
             <div class="kartya-ertek">{eur_huf:.1f} Ft</div>
             <div class="kartya-sub">MNB középárfolyam</div>
           </div>
-
           <div class="kartya" style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};">
             <div class="kartya-cim">{riado_ikon} Riasztás</div>
             <div class="kartya-ertek" style="color:{riado_szin};">{riado_ertek}</div>
             <div class="kartya-sub">küszöb: 6 812 MWh</div>
           </div>
-
         </div>
         """, unsafe_allow_html=True)
-
-        # ── (A navigációs script eltávolítva — a kártyák most egyszerű
-        # információs <div>-ek, nincs onclick, így nem kell JS sem) ──
 
         st.markdown("<div id='grafikon-fogyasztas' style='margin-top:12px;'></div>", unsafe_allow_html=True)
 
@@ -713,16 +725,93 @@ with tab1:
     else:
         st.info("Kattints az Előrejelzés frissítése gombra!")
 
+# ── TAB 2 — KORÁBBI JÓSLATOK (ÚJ: ADATBÁZISBÓL) ────────────────────
 with tab2:
-    st.markdown("### Válassz egy korábbi dátumot")
-    col_d, col_b = st.columns([2, 1])
-    with col_d:
-        datum_str = st.text_input("Dátum (ÉÉÉÉ-HH-NN)",
-                                   placeholder="pl. 2026-04-28",
-                                   label_visibility="collapsed",
-                                   key="datum_input")
-    with col_b:
-        betoltes = st.button("📂 Betöltés", key="betoltes_gomb")
-    if betoltes and datum_str:
-        st.info("ℹ️ A korábbi jóslatok mentési funkciója még fejlesztés alatt áll. "
-                "Ehhez egy adatbázis kapcsolat (pl. SQLite / CSV log) szükséges.")
+    st.markdown("### 📅 Korábbi jóslatok az adatbázisból")
+    
+    elerheto_datumok = db_osszes_datum()
+    
+    if not elerheto_datumok:
+        st.info("ℹ️ Még nincsenek mentett jóslatok az adatbázisban. Az automatikus mentés akkor indul, "
+                "amikor a 'Napi Predikció' tab-on új jóslat készül.")
+    else:
+        st.markdown(f"**{len(elerheto_datumok)} jóslási nap** elérhető az adatbázisban.")
+        col_d, col_b = st.columns([2, 1])
+        with col_d:
+            valasztott_datum = st.selectbox(
+                "Válassz jóslási dátumot:",
+                options=elerheto_datumok,
+                label_visibility="collapsed",
+                key="datum_selectbox"
+            )
+        with col_b:
+            betoltes = st.button("📂 Betöltés", key="betoltes_gomb")
+        
+        if betoltes and valasztott_datum:
+            sorok, hiba = olvas_db_bol(valasztott_datum)
+            if hiba:
+                st.error(f"Hiba: {hiba}")
+            elif not sorok:
+                st.warning("Nincs adat erre a dátumra.")
+            else:
+                st.success(f"✅ {len(sorok)} sor betöltve a {valasztott_datum} jóslásból")
+                
+                # DataFrame-mé alakítás
+                df = pd.DataFrame(sorok)
+                df = df.sort_values("cel_datuma")
+                
+                # Grafikon adatok előkészítése
+                datumok_t = [str(d) for d in df["cel_datuma"].tolist()]
+                fogy_t = [float(v) for v in df["fogyasztas_mwh"].tolist()]
+                hom_t = [float(v) for v in df["homerseklet"].tolist()]
+                kolt_t = [float(v) for v in df["koltseg_mft"].tolist()]
+                modellek_t = df["modell"].tolist()
+                riadok_t = [bool(v) for v in df["riado"].tolist()]
+                eur_huf_t = float(df["eur_huf"].iloc[0])
+                
+                st.markdown(f"""
+                <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
+                            padding:12px 16px; margin:12px 0;">
+                    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px;">
+                        <div style="text-align:center;">
+                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Jóslás dátuma</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{valasztott_datum}</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti fogyasztás</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(fogy_t):,.0f} MWh</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti költség</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(kolt_t):.1f} M Ft</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">EUR/HUF (akkor)</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{eur_huf_t:.1f} Ft</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Grafikonok
+                tt1, tt2, tt3 = st.tabs(["📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet"])
+                with tt1:
+                    components.html(
+                        fogyasztas_chart(datumok_t, fogy_t, modellek_t, riadok_t, eur_huf_t),
+                        height=440, scrolling=False)
+                with tt2:
+                    components.html(
+                        koltseg_chart(datumok_t, kolt_t, eur_huf_t),
+                        height=440, scrolling=False)
+                with tt3:
+                    components.html(
+                        homerseklet_chart(datumok_t, hom_t),
+                        height=440, scrolling=False)
+                
+                # Részletes táblázat
+                st.markdown("### 📋 Részletes adatok")
+                df_display = df[["cel_datuma", "fogyasztas_mwh", "homerseklet", 
+                                 "dam_ar", "koltseg_mft", "modell", "riado"]].copy()
+                df_display.columns = ["Dátum", "Fogyasztás (MWh)", "Hőmérséklet (°C)",
+                                     "DAM ár (EUR/MWh)", "Költség (M Ft)", "Modell", "Riasztás"]
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
