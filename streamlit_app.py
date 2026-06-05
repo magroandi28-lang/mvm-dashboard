@@ -141,8 +141,8 @@ def magyar_ma():
 # ── ADATBÁZIS FÜGGVÉNYEK (ÚJ) ────────────────────────────────────
 def ments_db_be(eredmenyek, eur_huf):
     """A 7 napos jóslatot bementi az Azure PostgreSQL adatbázisba."""
-    if not DATABASE_URL:
-        return False, "DATABASE_URL környezeti változó nincs beállítva"
+   # if not DATABASE_URL:
+       # return False, "DATABASE_URL környezeti változó nincs beállítva"
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor()
