@@ -168,7 +168,7 @@ def ments_db_be(eredmenyek, eur_huf):
 def olvas_db_bol(datum_str):
     """Egy adott napon készített jóslatokat olvas vissza az adatbázisból."""
     if not DATABASE_URL:
-        return None, "DATABASE_URL nincs beállítva"
+     #   return None, "DATABASE_URL nincs beállítva"
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
