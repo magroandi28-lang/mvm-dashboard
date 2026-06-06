@@ -22,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ── GLOBÁLIS STÍLUSOK + KÁRTYA STÍLUSOK EGY HELYEN (FIX: szellem kártyák) ──
 st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -49,8 +48,6 @@ st.markdown("""
 footer { display: none !important; }
 #MainMenu { display: none !important; }
 header { display: none !important; }
-
-/* ── KÁRTYA STÍLUSOK (CSS GRID, fix 8 oszlop, hover effekttel) ── */
 .kartya-sor {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
@@ -105,7 +102,6 @@ ENTSOE_API_KEY = os.environ.get("ENTSOE_API_KEY", "")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 BASE = os.path.dirname(os.path.abspath(__file__))
 
-# ── MODELL DEFINÍCIÓ ─────────────────────────────────────────────
 class FogyasztasModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -133,21 +129,16 @@ def modellek_betoltese():
 
 scaler_X_v1, scaler_y_v1, model_v1, scaler_X_v2, scaler_y_v2, model_v2 = modellek_betoltese()
 
-# ── AKTUÁLIS DÁTUM SEGÉDFÜGGVÉNY (FIX: magyar időzóna) ────────────
 def magyar_ma():
-    """Mindig a magyar időzóna szerinti aktuális dátumot adja vissza."""
     return pd.Timestamp.now(tz="Europe/Budapest").normalize().tz_localize(None).to_pydatetime()
 
-# ── ADATBÁZIS FÜGGVÉNYEK (ÚJ) ────────────────────────────────────
 def ments_db_be(eredmenyek, eur_huf):
-    """A 7 napos jóslatot bementi az Azure PostgreSQL adatbázisba."""
-   # if not DATABASE_URL:
-       # return False, "DATABASE_URL környezeti változó nincs beállítva"
+    if not DATABASE_URL:
+        return True, ""
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor()
         ma = pd.Timestamp.now(tz="Europe/Budapest").date()
-        # Először töröljük a mai napon készült korábbi mentéseket (idempotens)
         cur.execute("DELETE FROM predikciok WHERE joslas_datuma = %s", (ma,))
         for e in eredmenyek:
             koltseg = e["fogyasztas"] * e["dam_ar"] * eur_huf / 1_000_000
@@ -166,9 +157,8 @@ def ments_db_be(eredmenyek, eur_huf):
         return False, f"Hiba: {str(ex)}"
 
 def olvas_db_bol(datum_str):
-    """Egy adott napon készített jóslatokat olvas vissza az adatbázisból."""
     if not DATABASE_URL:
-     #   return None, "DATABASE_URL nincs beállítva"
+        return None, None
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -185,7 +175,6 @@ def olvas_db_bol(datum_str):
         return None, str(ex)
 
 def db_osszes_datum():
-    """Visszaadja az összes egyedi jóslási dátumot."""
     if not DATABASE_URL:
         return []
     try:
@@ -199,7 +188,6 @@ def db_osszes_datum():
     except:
         return []
 
-# ── API LEKÉRÉSEK ────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def get_eur_huf(_datum_kulcs=None):
     try:
@@ -216,7 +204,6 @@ def get_eur_huf(_datum_kulcs=None):
 
 @st.cache_data(ttl=600)
 def get_idojaras(datum_kulcs=None):
-    """FIX: datum_kulcs paraméter beépül a cache kulcsba → óránként új lekérés."""
     try:
         ma = magyar_ma()
         url = "https://api.open-meteo.com/v1/forecast"
@@ -269,7 +256,6 @@ def get_dam_ar(_datum_kulcs=None):
     except:
         return 104.93, 98.91, False
 
-# ── PREDIKCIÓ ────────────────────────────────────────────────────
 def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30):
     eredmenyek = []
     lag = LAG_KEZDO
@@ -302,7 +288,6 @@ def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30):
                            "modell": modell, "riado": josolt >= RIADOKUSZOB})
     return eredmenyek
 
-# ── CHART SEGÉDFÜGGVÉNY (látványos animáció: 2.5sec, 500ms delay, fade-in) ──
 def plotly_chart(adatok_json, layout_json, chart_id, height=420):
     return f"""<!DOCTYPE html>
 <html>
@@ -329,13 +314,11 @@ body {{ background:#0a1628; overflow:hidden; }}
     var config = {{responsive: true, displayModeBar: false}};
     var chartEl = document.getElementById('{chart_id}');
     var animated = false;
-
     var START_DELAY = 500;
     var ANIM_DURATION = 2500;
     var FRAME_RATE = 60;
     var TOTAL_STEPS = Math.round(ANIM_DURATION * FRAME_RATE / 1000);
     var FRAME_INTERVAL = 1000 / FRAME_RATE;
-
     function makeStartData() {{
         return finalData.map(function(trace) {{
             var t = JSON.parse(JSON.stringify(trace));
@@ -347,11 +330,9 @@ body {{ background:#0a1628; overflow:hidden; }}
             return t;
         }});
     }}
-
     function easeOutCubic(t) {{
         return 1 - Math.pow(1 - t, 3);
     }}
-
     function runAnimation() {{
         if (animated) return;
         animated = true;
@@ -376,7 +357,6 @@ body {{ background:#0a1628; overflow:hidden; }}
             }}
         }}, FRAME_INTERVAL);
     }}
-
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
         if ('IntersectionObserver' in window) {{
             var observer = new IntersectionObserver(function(entries) {{
@@ -396,7 +376,6 @@ body {{ background:#0a1628; overflow:hidden; }}
 </body>
 </html>"""
 
-# ── CHART FÜGGVÉNYEK ─────────────────────────────────────────────
 def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=420):
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
     feliratok = [f"{v:,.0f} ({m})".replace(",", " ") for v, m in zip(fogyasztasok, modellek)]
@@ -500,7 +479,6 @@ def homerseklet_chart(datumok, homersekletek, height=420):
     })
     return plotly_chart(adatok, layout, "homerseklet", height)
 
-# ── FEJLÉC ────────────────────────────────────────────────────
 st.markdown("""
 <div style="background:linear-gradient(135deg,#003366 0%,#0055aa 100%);
             padding:20px 32px; border-radius:12px; margin-bottom:16px;
@@ -557,30 +535,29 @@ with tab1:
             st.session_state.dam_atlag_30 = dam_atlag_30
             st.session_state.dam_valodi = dam_valodi
             st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
-            # ÚJ: Automatikus mentés az adatbázisba (egyszer a session-en belül)
             siker, uzenet = ments_db_be(eredmenyek, eur_huf)
             st.session_state.db_mentes_uzenet = (siker, uzenet)
 
     if "frissites_ideje" in st.session_state:
         allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
 
-    # ÚJ: Adatbázis mentés státusz megjelenítése
     if "db_mentes_uzenet" in st.session_state:
         siker, uzenet = st.session_state.db_mentes_uzenet
-        if siker:
-            st.markdown(f"""
-            <div style="background:#0a1628; border:1px solid #10b981; border-radius:8px;
-                        padding:8px 16px; margin-bottom:12px; text-align:center;">
-                <span style="color:#10b981; font-weight:600; font-family:Montserrat,sans-serif;">
-                💾 Adatbázis: {uzenet}</span>
-            </div>""", unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div style="background:#0a1628; border:1px solid #FF6600; border-radius:8px;
-                        padding:8px 16px; margin-bottom:12px; text-align:center;">
-                <span style="color:#FF6600; font-weight:600; font-family:Montserrat,sans-serif;">
-                ⚠️ Adatbázis: {uzenet}</span>
-            </div>""", unsafe_allow_html=True)
+        if uzenet:
+            if siker:
+                st.markdown(f"""
+                <div style="background:#0a1628; border:1px solid #10b981; border-radius:8px;
+                            padding:8px 16px; margin-bottom:12px; text-align:center;">
+                    <span style="color:#10b981; font-weight:600; font-family:Montserrat,sans-serif;">
+                    💾 Adatbázis: {uzenet}</span>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background:#0a1628; border:1px solid #FF6600; border-radius:8px;
+                            padding:8px 16px; margin-bottom:12px; text-align:center;">
+                    <span style="color:#FF6600; font-weight:600; font-family:Montserrat,sans-serif;">
+                    ⚠️ Adatbázis: {uzenet}</span>
+                </div>""", unsafe_allow_html=True)
 
     if "eredmenyek" in st.session_state:
         eredmenyek = st.session_state.eredmenyek
@@ -725,7 +702,6 @@ with tab1:
     else:
         st.info("Kattints az Előrejelzés frissítése gombra!")
 
-# ── TAB 2 — KORÁBBI JÓSLATOK (ÚJ: ADATBÁZISBÓL) ────────────────────
 with tab2:
     st.markdown("### 📅 Korábbi jóslatok az adatbázisból")
     
@@ -756,11 +732,9 @@ with tab2:
             else:
                 st.success(f"✅ {len(sorok)} sor betöltve a {valasztott_datum} jóslásból")
                 
-                # DataFrame-mé alakítás
                 df = pd.DataFrame(sorok)
                 df = df.sort_values("cel_datuma")
                 
-                # Grafikon adatok előkészítése
                 datumok_t = [str(d) for d in df["cel_datuma"].tolist()]
                 fogy_t = [float(v) for v in df["fogyasztas_mwh"].tolist()]
                 hom_t = [float(v) for v in df["homerseklet"].tolist()]
@@ -793,7 +767,6 @@ with tab2:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Grafikonok
                 tt1, tt2, tt3 = st.tabs(["📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet"])
                 with tt1:
                     components.html(
@@ -808,7 +781,6 @@ with tab2:
                         homerseklet_chart(datumok_t, hom_t),
                         height=440, scrolling=False)
                 
-                # Részletes táblázat
                 st.markdown("### 📋 Részletes adatok")
                 df_display = df[["cel_datuma", "fogyasztas_mwh", "homerseklet", 
                                  "dam_ar", "koltseg_mft", "modell", "riado"]].copy()
