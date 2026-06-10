@@ -222,6 +222,26 @@ def get_idojaras(datum_kulcs=None):
                 for i in range(7)]
 
 @st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
+def get_valos_kezdo_lag(_datum_kulcs=None):
+    if not ENTSOE_API_KEY:
+        return LAG_KEZDO, False
+    try:
+        client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+        ma = magyar_ma()
+        ma = pd.Timestamp(ma).normalize()
+        for delta in [1, 2, 3]:
+            nap = ma - pd.Timedelta(days=delta)
+            try:
+                load = client.query_load("HU", start=nap, end=nap + pd.Timedelta(days=1))
+                s = load.iloc[:, 0].dropna()
+                if len(s) >= 20:
+                    return float(s.mean()), True
+            except:
+                continue
+        return LAG_KEZDO, False
+    except:
+        return LAG_KEZDO, False
 def get_dam_ar(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
         return 104.93, 98.91, False
