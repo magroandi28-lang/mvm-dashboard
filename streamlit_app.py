@@ -548,7 +548,8 @@ with tab1:
             eur_huf = get_eur_huf(_datum_kulcs=ora_kulcs)
             idojaras_lista = get_idojaras(datum_kulcs=ora_kulcs)
             dam_ar_1nap, dam_atlag_30, dam_valodi = get_dam_ar(_datum_kulcs=ora_kulcs)
-            eredmenyek = ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30)
+            kezdo_lag, lag_valodi = get_valos_kezdo_lag(_datum_kulcs=ora_kulcs)
+            eredmenyek = ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30, kezdo_lag)
             st.session_state.eredmenyek = eredmenyek
             st.session_state.eur_huf = eur_huf
             st.session_state.dam_ar_1nap = dam_ar_1nap
