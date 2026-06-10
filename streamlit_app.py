@@ -256,9 +256,9 @@ def get_dam_ar(_datum_kulcs=None):
     except:
         return 104.93, 98.91, False
 
-def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30):
+def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30, kezdo_lag=LAG_KEZDO):
     eredmenyek = []
-    lag = LAG_KEZDO
+    lag = kezdo_lag
     for i, nap in enumerate(idojaras_lista):
         datum = nap["datum"]
         homerseklet = nap["homerseklet"]
