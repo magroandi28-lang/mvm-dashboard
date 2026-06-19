@@ -141,7 +141,7 @@ def ments_db_be(eredmenyek, eur_huf):
         ma = pd.Timestamp.now(tz="Europe/Budapest").date()
         cur.execute("DELETE FROM predikciok WHERE joslas_datuma = %s", (ma,))
         for e in eredmenyek:
-            koltseg = e["fogyasztas"] * e["dam_ar"] * eur_huf / 1_000_000
+            koltseg = e["fogyasztas"] * 24 * e["dam_ar"] * eur_huf / 1_000_000
             cur.execute("""
                 INSERT INTO predikciok 
                 (joslas_datuma, cel_datuma, fogyasztas_mwh, homerseklet, 
@@ -591,7 +591,7 @@ with tab1:
         fogyasztasok = [e["fogyasztas"] for e in eredmenyek]
         homersekletek = [e["homerseklet"] for e in eredmenyek]
         modellek_lista = [e["modell"] for e in eredmenyek]
-        koltsegek = [e["fogyasztas"] * e["dam_ar"] * eur_huf / 1_000_000 for e in eredmenyek]
+        koltsegek = [e["fogyasztas"] * 24 * e["dam_ar"] * eur_huf / 1_000_000 for e in eredmenyek]
         riadok = [e["riado"] for e in eredmenyek]
 
         heti_fogyasztas = sum(fogyasztasok)
