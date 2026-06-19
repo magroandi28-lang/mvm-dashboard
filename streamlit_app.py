@@ -396,13 +396,14 @@ body {{ background:#0a1628; overflow:hidden; }}
 </body>
 </html>"""
 
-def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=420):
+def fogyasztas_chart(datumok, fogyasztasok_gwh, modellek, riadok, eur_huf, height=420):
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
-    feliratok = [f"{v:,.0f} ({m})".replace(",", " ") for v, m in zip(fogyasztasok, modellek)]
+    feliratok = [f"{v:.1f} ({m})" for v, m in zip(fogyasztasok_gwh, modellek)]
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
+    kuszob_gwh = RIADOKUSZOB * 24 / 1000
     adatok = json.dumps([{
-        "type": "bar", "x": datumok, "y": fogyasztasok,
+        "type": "bar", "x": datumok, "y": fogyasztasok_gwh,
         "marker": {"color": colors, "opacity": 0.9},
         "text": feliratok, "textposition": "outside",
         "textfont": {"color": "#ffffff", "size": 11},
@@ -412,19 +413,19 @@ def fogyasztas_chart(datumok, fogyasztasok, modellek, riadok, eur_huf, height=42
     layout = json.dumps({
         "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
-        "title": {"text": "7 napos fogyasztás előrejelzés (MWh)",
+        "title": {"text": "7 napos fogyasztás előrejelzés (GWh)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
-        "yaxis": {"gridcolor": "#1e3a5f", "title": "MWh", "color": "#cbd5e1",
-                  "range": [0, max(fogyasztasok) * 1.25]},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "GWh", "color": "#cbd5e1",
+                  "range": [0, max(max(fogyasztasok_gwh) * 1.25, kuszob_gwh * 1.05)]},
         "bargap": 0.55, "showlegend": False,
         "shapes": [{"type": "line", "xref": "paper", "x0": 0, "x1": 1,
-                    "y0": RIADOKUSZOB, "y1": RIADOKUSZOB,
+                    "y0": kuszob_gwh, "y1": kuszob_gwh,
                     "line": {"color": "#FF6600", "width": 2, "dash": "dash"}}],
-        "annotations": [{"xref": "paper", "x": 0.5, "y": RIADOKUSZOB,
-                         "text": "Riasztási küszöb (6 812 MWh)",
+        "annotations": [{"xref": "paper", "x": 0.5, "y": kuszob_gwh,
+                         "text": f"Riasztási küszöb ({kuszob_gwh:.1f} GWh)",
                          "showarrow": False, "font": {"color": "#FF6600", "size": 10},
                          "yanchor": "bottom",
                          "bgcolor": "#0a1628", "borderpad": 2}]
@@ -588,19 +589,24 @@ with tab1:
         dam_valodi = st.session_state.get("dam_valodi", False)
 
         datumok = [e["datum"].strftime("%Y-%m-%d") for e in eredmenyek]
-        fogyasztasok = [e["fogyasztas"] for e in eredmenyek]
+        fogyasztasok_gwh = [e["fogyasztas"] * 24 / 1000 for e in eredmenyek]
         homersekletek = [e["homerseklet"] for e in eredmenyek]
         modellek_lista = [e["modell"] for e in eredmenyek]
         koltsegek = [e["fogyasztas"] * 24 * e["dam_ar"] * eur_huf / 1_000_000 for e in eredmenyek]
         riadok = [e["riado"] for e in eredmenyek]
 
-        heti_fogyasztas = sum(fogyasztasok)
+        heti_fogyasztas_gwh = sum(fogyasztasok_gwh)
         heti_koltseg = sum(koltsegek)
-        max_nap = max(eredmenyek, key=lambda e: e["fogyasztas"])
-        min_nap = min(eredmenyek, key=lambda e: e["fogyasztas"])
+        max_idx = max(range(len(eredmenyek)), key=lambda i: eredmenyek[i]["fogyasztas"])
+        min_idx = min(range(len(eredmenyek)), key=lambda i: eredmenyek[i]["fogyasztas"])
+        max_nap = eredmenyek[max_idx]
+        min_nap = eredmenyek[min_idx]
+        max_fog_gwh = fogyasztasok_gwh[max_idx]
+        min_fog_gwh = fogyasztasok_gwh[min_idx]
         riado_napok = [e for e in eredmenyek if e["riado"]]
         v1 = sum(1 for e in eredmenyek if e["modell"] == "V1")
         v2 = sum(1 for e in eredmenyek if e["modell"] == "V2")
+        kuszob_gwh = RIADOKUSZOB * 24 / 1000
 
         if v2 > 0:
             modell_szin = "#FF6600"
@@ -616,8 +622,8 @@ with tab1:
             🤖 {modell_szoveg}</span>
         </div>""", unsafe_allow_html=True)
 
-        elso3_fog = sum(fogyasztasok[:3]) / 3
-        utolso3_fog = sum(fogyasztasok[-3:]) / 3
+        elso3_fog = sum(fogyasztasok_gwh[:3]) / 3
+        utolso3_fog = sum(fogyasztasok_gwh[-3:]) / 3
         trend_fog = "▲" if utolso3_fog > elso3_fog else "▼"
         trend_fog_szin = "#FF6600" if utolso3_fog > elso3_fog else "#10b981"
 
@@ -637,30 +643,30 @@ with tab1:
         kolt_valt = ((utolso3_kolt - elso3_kolt) / elso3_kolt) * 100
         dam_valt = ((dam_ar_1nap - dam_atlag_30) / dam_atlag_30) * 100
 
-        tooltip_fog = f"Heti fogyasztás trend: első 3 nap átlaga ({elso3_fog:,.0f} MWh) vs utolsó 3 nap átlaga ({utolso3_fog:,.0f} MWh), változás: {fog_valt:+.1f}%"
-        tooltip_kolt = f"Heti költség trend: első 3 nap átlaga ({elso3_kolt:.1f} M Ft) vs utolsó 3 nap átlaga ({utolso3_kolt:.1f} M Ft), változás: {kolt_valt:+.1f}%"
+        tooltip_fog = f"Heti fogyasztás trend: első 3 nap átlaga ({elso3_fog:.1f} GWh) vs utolsó 3 nap átlaga ({utolso3_fog:.1f} GWh), változás: {fog_valt:+.1f}%"
+        tooltip_kolt = f"Heti költség trend: első 3 nap átlaga ({elso3_kolt:.0f} M Ft) vs utolsó 3 nap átlaga ({utolso3_kolt:.0f} M Ft), változás: {kolt_valt:+.1f}%"
         tooltip_dam = f"DAM ár vs 30 napos átlag: holnapi ({dam_ar_1nap:.2f}) vs 30 napos ({dam_atlag_30:.2f} EUR/MWh), változás: {dam_valt:+.1f}%"
 
         st.markdown(f"""
         <div class="kartya-sor">
           <div class="kartya">
             <div class="kartya-cim">⚡ Heti fogyasztás</div>
-            <div class="kartya-ertek">{heti_fogyasztas:,.0f} MWh</div>
+            <div class="kartya-ertek">{heti_fogyasztas_gwh:.1f} GWh</div>
             <div class="kartya-trend" style="color:{trend_fog_szin};" title="{tooltip_fog}">{trend_fog} heti trend</div>
           </div>
           <div class="kartya">
             <div class="kartya-cim">💰 Heti költség</div>
-            <div class="kartya-ertek">{heti_koltseg:.1f} M Ft</div>
+            <div class="kartya-ertek">{heti_koltseg/1000:.1f} Mrd Ft</div>
             <div class="kartya-trend" style="color:{trend_koltseg_szin};" title="{tooltip_kolt}">{trend_koltseg} heti trend</div>
           </div>
           <div class="kartya">
             <div class="kartya-cim">📈 Csúcs</div>
-            <div class="kartya-ertek">{max_nap['fogyasztas']:,.0f} MWh</div>
+            <div class="kartya-ertek">{max_fog_gwh:.1f} GWh</div>
             <div class="kartya-sub">{max_nap['datum'].strftime('%m.%d')}</div>
           </div>
           <div class="kartya">
             <div class="kartya-cim">📉 Minimum</div>
-            <div class="kartya-ertek">{min_nap['fogyasztas']:,.0f} MWh</div>
+            <div class="kartya-ertek">{min_fog_gwh:.1f} GWh</div>
             <div class="kartya-sub">{min_nap['datum'].strftime('%m.%d')}</div>
           </div>
           <div class="kartya">
@@ -681,7 +687,7 @@ with tab1:
           <div class="kartya" style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};">
             <div class="kartya-cim">{riado_ikon} Riasztás</div>
             <div class="kartya-ertek" style="color:{riado_szin};">{riado_ertek}</div>
-            <div class="kartya-sub">küszöb: 6 812 MWh</div>
+            <div class="kartya-sub">küszöb: {kuszob_gwh:.1f} GWh</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -693,7 +699,7 @@ with tab1:
 
         with gt1:
             components.html(
-                fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf),
+                fogyasztas_chart(datumok, fogyasztasok_gwh, modellek_lista, riadok, eur_huf),
                 height=440, scrolling=False)
 
         with gt2:
@@ -710,7 +716,7 @@ with tab1:
             c1, c2, c3 = st.columns(3)
             with c1:
                 components.html(
-                    fogyasztas_chart(datumok, fogyasztasok, modellek_lista, riadok, eur_huf, height=300),
+                    fogyasztas_chart(datumok, fogyasztasok_gwh, modellek_lista, riadok, eur_huf, height=300),
                     height=320, scrolling=False)
             with c2:
                 components.html(
@@ -757,7 +763,7 @@ with tab2:
                 df = df.sort_values("cel_datuma")
                 
                 datumok_t = [str(d) for d in df["cel_datuma"].tolist()]
-                fogy_t = [float(v) for v in df["fogyasztas_mwh"].tolist()]
+                fogy_t_gwh = [float(v) * 24 / 1000 for v in df["fogyasztas_mwh"].tolist()]
                 hom_t = [float(v) for v in df["homerseklet"].tolist()]
                 kolt_t = [float(v) for v in df["koltseg_mft"].tolist()]
                 modellek_t = df["modell"].tolist()
@@ -774,11 +780,11 @@ with tab2:
                         </div>
                         <div style="text-align:center;">
                             <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti fogyasztás</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(fogy_t):,.0f} MWh</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(fogy_t_gwh):.1f} GWh</div>
                         </div>
                         <div style="text-align:center;">
                             <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti költség</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(kolt_t):.1f} M Ft</div>
+                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(kolt_t)/1000:.1f} Mrd Ft</div>
                         </div>
                         <div style="text-align:center;">
                             <div style="color:#64748b; font-size:10px; text-transform:uppercase;">EUR/HUF (akkor)</div>
@@ -791,7 +797,7 @@ with tab2:
                 tt1, tt2, tt3 = st.tabs(["📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet"])
                 with tt1:
                     components.html(
-                        fogyasztas_chart(datumok_t, fogy_t, modellek_t, riadok_t, eur_huf_t),
+                        fogyasztas_chart(datumok_t, fogy_t_gwh, modellek_t, riadok_t, eur_huf_t),
                         height=440, scrolling=False)
                 with tt2:
                     components.html(
@@ -805,6 +811,6 @@ with tab2:
                 st.markdown("### 📋 Részletes adatok")
                 df_display = df[["cel_datuma", "fogyasztas_mwh", "homerseklet", 
                                  "dam_ar", "koltseg_mft", "modell", "riado"]].copy()
-                df_display.columns = ["Dátum", "Fogyasztás (MWh)", "Hőmérséklet (°C)",
+                df_display.columns = ["Dátum", "Fogyasztás (MWh, óra-átlag)", "Hőmérséklet (°C)",
                                      "DAM ár (EUR/MWh)", "Költség (M Ft)", "Modell", "Riasztás"]
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
