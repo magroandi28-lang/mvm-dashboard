@@ -619,7 +619,7 @@ with tab1:
         <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
                     padding:8px 16px; margin-bottom:12px; text-align:center;">
             <span style="color:{modell_szin}; font-weight:600; font-family:Montserrat,sans-serif;">
-            🤖 {modell_szoveg}</span>
+            {modell_szoveg}</span>
         </div>""", unsafe_allow_html=True)
 
         elso3_fog = sum(fogyasztasok_gwh[:3]) / 3
