@@ -221,7 +221,6 @@ def get_idojaras(datum_kulcs=None):
         return [{"datum": pd.to_datetime(ma + timedelta(days=i+1)), "homerseklet": 12.0}
                 for i in range(7)]
 
-@st.cache_data(ttl=300)
 @st.cache_data(ttl=600)
 def get_valos_kezdo_lag(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
@@ -242,6 +241,8 @@ def get_valos_kezdo_lag(_datum_kulcs=None):
         return LAG_KEZDO, False
     except:
         return LAG_KEZDO, False
+
+@st.cache_data(ttl=300)
 def get_dam_ar(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
         return 104.93, 98.91, False
@@ -249,7 +250,7 @@ def get_dam_ar(_datum_kulcs=None):
         client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
         ma = magyar_ma()
         legfrissebb = 104.93
-        for delta in [-1, -2, -3]:
+        for delta in [1, 0, -1, -2]:
             try:
                 nap = ma + timedelta(days=delta)
                 start = pd.Timestamp(nap.strftime("%Y-%m-%d"), tz="Europe/Budapest")
