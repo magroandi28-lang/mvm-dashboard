@@ -221,6 +221,7 @@ def get_idojaras(datum_kulcs=None):
         return [{"datum": pd.to_datetime(ma + timedelta(days=i+1)), "homerseklet": 12.0}
                 for i in range(7)]
 
+@st.cache_data(ttl=300)
 @st.cache_data(ttl=600)
 def get_valos_kezdo_lag(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
@@ -241,8 +242,6 @@ def get_valos_kezdo_lag(_datum_kulcs=None):
         return LAG_KEZDO, False
     except:
         return LAG_KEZDO, False
-
-@st.cache_data(ttl=300)
 def get_dam_ar(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
         return 104.93, 98.91, False
@@ -250,7 +249,7 @@ def get_dam_ar(_datum_kulcs=None):
         client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
         ma = magyar_ma()
         legfrissebb = 104.93
-        for delta in [1, 0, -1, -2]:
+        for delta in [-1, -2, -3]:
             try:
                 nap = ma + timedelta(days=delta)
                 start = pd.Timestamp(nap.strftime("%Y-%m-%d"), tz="Europe/Budapest")
@@ -332,9 +331,10 @@ body {{ background:#0a1628; overflow:hidden; }}
 (function() {{
     var finalData = {adatok_json};
     var layout = {layout_json};
-    var config = {{responsive: true, displayModeBar: false}};
+    var config = {{responsive: true, displayModeBar: false, staticPlot: false, scrollZoom: false}};
     var chartEl = document.getElementById('{chart_id}');
     var animated = false;
+    var animating = false;
     var START_DELAY = 500;
     var ANIM_DURATION = 2500;
     var FRAME_RATE = 60;
@@ -354,36 +354,49 @@ body {{ background:#0a1628; overflow:hidden; }}
     function easeOutCubic(t) {{
         return 1 - Math.pow(1 - t, 3);
     }}
-    function runAnimation() {{
-        if (animated) return;
-        animated = true;
-        chartEl.classList.add('fade-in');
-        var current = 0;
-        var timer = setInterval(function() {{
-            current++;
-            var t = current / TOTAL_STEPS;
-            var eased = easeOutCubic(t);
-            var animData = finalData.map(function(trace) {{
-                var copy = JSON.parse(JSON.stringify(trace));
-                if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
-                if (copy.text && t < 0.9) {{
-                    copy.text = copy.text.map(function() {{ return ''; }});
-                }}
-                return copy;
-            }});
-            Plotly.react('{chart_id}', animData, layout, config);
-            if (current >= TOTAL_STEPS) {{
-                clearInterval(timer);
-                Plotly.react('{chart_id}', finalData, layout, config);
-            }}
-        }}, FRAME_INTERVAL);
+    function resetChart() {{
+        chartEl.classList.remove('fade-in');
+        Plotly.react('{chart_id}', makeStartData(), layout, config);
     }}
+    function runAnimation() {{
+        if (animating) return;
+        animating = true;
+        animated = true;
+        resetChart();
+        setTimeout(function() {{
+            chartEl.classList.add('fade-in');
+            var current = 0;
+            var timer = setInterval(function() {{
+                current++;
+                var t = current / TOTAL_STEPS;
+                var eased = easeOutCubic(t);
+                var animData = finalData.map(function(trace) {{
+                    var copy = JSON.parse(JSON.stringify(trace));
+                    if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
+                    if (copy.text && t < 0.9) {{
+                        copy.text = copy.text.map(function() {{ return ''; }});
+                    }}
+                    return copy;
+                }});
+                Plotly.react('{chart_id}', animData, layout, config);
+                if (current >= TOTAL_STEPS) {{
+                    clearInterval(timer);
+                    Plotly.react('{chart_id}', finalData, layout, config);
+                    animating = false;
+                }}
+            }}, FRAME_INTERVAL);
+        }}, 100);
+    }}
+    chartEl.addEventListener('touchstart', function(e) {{ e.stopPropagation(); }}, {{passive: true}});
+    chartEl.addEventListener('touchmove', function(e) {{ e.stopPropagation(); }}, {{passive: true}});
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
         if ('IntersectionObserver' in window) {{
             var observer = new IntersectionObserver(function(entries) {{
                 entries.forEach(function(entry) {{
-                    if (entry.isIntersecting && !animated) {{
+                    if (entry.isIntersecting) {{
                         setTimeout(runAnimation, START_DELAY);
+                    }} else if (animated) {{
+                        animated = false;
                     }}
                 }});
             }}, {{threshold: 0.1}});
