@@ -331,10 +331,13 @@ body {{ background:#0a1628; overflow:hidden; }}
 (function() {{
     var finalData = {adatok_json};
     var layout = {layout_json};
-    var config = {{responsive: true, displayModeBar: false, staticPlot: false, scrollZoom: false}};
+    var config = {{responsive: true, displayModeBar: false}};
+    layout.dragmode = false;
+    layout.hovermode = 'closest';
     var chartEl = document.getElementById('{chart_id}');
-    var animated = false;
     var animating = false;
+    var lastVisible = false;
+    var animDone = false;
     var START_DELAY = 500;
     var ANIM_DURATION = 2500;
     var FRAME_RATE = 60;
@@ -345,7 +348,6 @@ body {{ background:#0a1628; overflow:hidden; }}
             var t = JSON.parse(JSON.stringify(trace));
             if (t.y) t.y = t.y.map(function() {{ return 0; }});
             if (t.text) {{
-                t._origText = t.text;
                 t.text = t.text.map(function() {{ return ''; }});
             }}
             return t;
@@ -354,56 +356,53 @@ body {{ background:#0a1628; overflow:hidden; }}
     function easeOutCubic(t) {{
         return 1 - Math.pow(1 - t, 3);
     }}
-    function resetChart() {{
-        chartEl.classList.remove('fade-in');
-        Plotly.react('{chart_id}', makeStartData(), layout, config);
+    function isVisible() {{
+        if (document.hidden) return false;
+        var rect = chartEl.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
     }}
     function runAnimation() {{
         if (animating) return;
         animating = true;
-        animated = true;
-        resetChart();
-        setTimeout(function() {{
-            chartEl.classList.add('fade-in');
-            var current = 0;
-            var timer = setInterval(function() {{
-                current++;
-                var t = current / TOTAL_STEPS;
-                var eased = easeOutCubic(t);
-                var animData = finalData.map(function(trace) {{
-                    var copy = JSON.parse(JSON.stringify(trace));
-                    if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
-                    if (copy.text && t < 0.9) {{
-                        copy.text = copy.text.map(function() {{ return ''; }});
+        chartEl.style.opacity = '0';
+        Plotly.react('{chart_id}', makeStartData(), layout, config).then(function() {{
+            setTimeout(function() {{
+                chartEl.style.opacity = '1';
+                var current = 0;
+                var timer = setInterval(function() {{
+                    current++;
+                    var t = current / TOTAL_STEPS;
+                    var eased = easeOutCubic(t);
+                    var animData = finalData.map(function(trace) {{
+                        var copy = JSON.parse(JSON.stringify(trace));
+                        if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
+                        if (copy.text && t < 0.9) {{
+                            copy.text = copy.text.map(function() {{ return ''; }});
+                        }}
+                        return copy;
+                    }});
+                    Plotly.react('{chart_id}', animData, layout, config);
+                    if (current >= TOTAL_STEPS) {{
+                        clearInterval(timer);
+                        Plotly.react('{chart_id}', finalData, layout, config);
+                        animating = false;
+                        animDone = true;
                     }}
-                    return copy;
-                }});
-                Plotly.react('{chart_id}', animData, layout, config);
-                if (current >= TOTAL_STEPS) {{
-                    clearInterval(timer);
-                    Plotly.react('{chart_id}', finalData, layout, config);
-                    animating = false;
-                }}
-            }}, FRAME_INTERVAL);
-        }}, 100);
+                }}, FRAME_INTERVAL);
+            }}, 100);
+        }});
     }}
-    chartEl.addEventListener('touchstart', function(e) {{ e.stopPropagation(); }}, {{passive: true}});
-    chartEl.addEventListener('touchmove', function(e) {{ e.stopPropagation(); }}, {{passive: true}});
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
-        if ('IntersectionObserver' in window) {{
-            var observer = new IntersectionObserver(function(entries) {{
-                entries.forEach(function(entry) {{
-                    if (entry.isIntersecting) {{
-                        setTimeout(runAnimation, START_DELAY);
-                    }} else if (animated) {{
-                        animated = false;
-                    }}
-                }});
-            }}, {{threshold: 0.1}});
-            observer.observe(chartEl);
-        }} else {{
-            setTimeout(runAnimation, START_DELAY);
-        }}
+        setInterval(function() {{
+            var vis = isVisible();
+            if (vis && !lastVisible) {{
+                setTimeout(runAnimation, START_DELAY);
+            }}
+            if (!vis && animDone) {{
+                animDone = false;
+            }}
+            lastVisible = vis;
+        }}, 300);
     }});
 }})();
 </script>
