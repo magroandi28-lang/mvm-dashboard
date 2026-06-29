@@ -1,22 +1,18 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import joblib
-import torch
-import torch.nn as nn
 import numpy as np
 import pandas as pd
 import holidays
 import requests
 import os
 import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from datetime import datetime, timedelta
 from io import StringIO
 from entsoe import EntsoePandasClient
 
 st.set_page_config(
-    page_title="MVM Energiafogyasztás Előrejelző",
+    page_title="MVM Energiafogyasztás Előrejelző V3",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -95,99 +91,42 @@ header { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
-RIADOKUSZOB = 6812.0
-LAG_KEZDO = 4796.52
+# === KONSTANSOK ===
 hu_holidays = holidays.Hungary(years=[2026, 2027])
 ENTSOE_API_KEY = os.environ.get("ENTSOE_API_KEY", "")
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
 BASE = os.path.dirname(os.path.abspath(__file__))
 
-class FogyasztasModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.model = nn.Sequential(
-            nn.Linear(9, 64), nn.ReLU(),
-            nn.Linear(64, 32), nn.ReLU(),
-            nn.Linear(32, 1)
-        )
-    def forward(self, x):
-        return self.model(x)
+# === MODELL ÉS STL BETÖLTÉS ===
+@st.cache_resource
+def modell_betoltese():
+    model = joblib.load(f"{BASE}/xgb_model.pkl")
+    return model
 
 @st.cache_resource
-def modellek_betoltese():
-    sx1 = joblib.load(f"{BASE}/scaler_X_v1.pkl")
-    sy1 = joblib.load(f"{BASE}/scaler_y_v1.pkl")
-    m1 = FogyasztasModel()
-    m1.load_state_dict(torch.load(f"{BASE}/fogyasztas_model_v1.pth", map_location="cpu"))
-    m1.eval()
-    sx2 = joblib.load(f"{BASE}/scaler_X_v2.pkl")
-    sy2 = joblib.load(f"{BASE}/scaler_y_v2.pkl")
-    m2 = FogyasztasModel()
-    m2.load_state_dict(torch.load(f"{BASE}/fogyasztas_model_v2.pth", map_location="cpu"))
-    m2.eval()
-    return sx1, sy1, m1, sx2, sy2, m2
+def stl_betoltese():
+    with open(f"{BASE}/stl_params.json", "r") as f:
+        params = json.load(f)
+    seasonal = pd.read_csv(f"{BASE}/stl_seasonal.csv", index_col=0, parse_dates=True)
+    return params, seasonal
 
-scaler_X_v1, scaler_y_v1, model_v1, scaler_X_v2, scaler_y_v2, model_v2 = modellek_betoltese()
+@st.cache_resource
+def negativ_arak_betoltese():
+    return pd.read_csv(f"{BASE}/negativ_arak_summary.csv")
+
+model = modell_betoltese()
+stl_params, stl_seasonal = stl_betoltese()
+neg_summary = negativ_arak_betoltese()
+
+FEATURE_SORREND = ['DAM_EUR_MWh', 'Homerseklet_C', 'Paratartalom_szazalek', 'Napsugarzas_W_m2',
+                   'Szelsebesseg_kmh', 'Csapadek_mm', 'EUR_HUF', 'Ora', 'Het_napja', 'Honap',
+                   'Unnepnap', 'Hetvege', 'Extrem_hideg', 'Extrem_meleg',
+                   'Fogyasztas_lag1h', 'Fogyasztas_lag24h', 'Fogyasztas_lag168h',
+                   'Nap_termeles_MW', 'Szel_termeles_MW']
 
 def magyar_ma():
     return pd.Timestamp.now(tz="Europe/Budapest").normalize().tz_localize(None).to_pydatetime()
 
-def ments_db_be(eredmenyek, eur_huf):
-    if not DATABASE_URL:
-        return True, ""
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        cur = conn.cursor()
-        ma = pd.Timestamp.now(tz="Europe/Budapest").date()
-        cur.execute("DELETE FROM predikciok WHERE joslas_datuma = %s", (ma,))
-        for e in eredmenyek:
-            koltseg = e["fogyasztas"] * 24 * e["dam_ar"] * eur_huf / 1_000_000
-            cur.execute("""
-                INSERT INTO predikciok 
-                (joslas_datuma, cel_datuma, fogyasztas_mwh, homerseklet, 
-                 dam_ar, koltseg_mft, modell, riado, eur_huf)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (ma, e["datum"].date(), float(e["fogyasztas"]), float(e["homerseklet"]),
-                  float(e["dam_ar"]), float(koltseg), e["modell"], bool(e["riado"]), float(eur_huf)))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True, f"{len(eredmenyek)} sor sikeresen mentve"
-    except Exception as ex:
-        return False, f"Hiba: {str(ex)}"
-
-def olvas_db_bol(datum_str):
-    if not DATABASE_URL:
-        return None, None
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT * FROM predikciok 
-            WHERE joslas_datuma = %s 
-            ORDER BY cel_datuma
-        """, (datum_str,))
-        sorok = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [dict(s) for s in sorok], None
-    except Exception as ex:
-        return None, str(ex)
-
-def db_osszes_datum():
-    if not DATABASE_URL:
-        return []
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT joslas_datuma FROM predikciok ORDER BY joslas_datuma DESC")
-        datumok = [str(r[0]) for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-        return datumok
-    except:
-        return []
-
+# === ADATLEKÉRŐ FÜGGVÉNYEK ===
 @st.cache_data(ttl=300)
 def get_eur_huf(_datum_kulcs=None):
     try:
@@ -203,111 +142,147 @@ def get_eur_huf(_datum_kulcs=None):
         return 395.0
 
 @st.cache_data(ttl=600)
-def get_idojaras(datum_kulcs=None):
+def get_oras_idojaras(_datum_kulcs=None):
     try:
         ma = magyar_ma()
         url = "https://api.open-meteo.com/v1/forecast"
         params = {"latitude": 47.5, "longitude": 19.0,
-                  "daily": "temperature_2m_mean",
+                  "hourly": "temperature_2m,relative_humidity_2m,direct_radiation,wind_speed_10m,precipitation",
                   "timezone": "Europe/Budapest",
                   "start_date": (ma + timedelta(days=1)).strftime("%Y-%m-%d"),
                   "end_date": (ma + timedelta(days=7)).strftime("%Y-%m-%d")}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params=params, timeout=15)
         data = r.json()
-        return [{"datum": pd.to_datetime(d), "homerseklet": t}
-                for d, t in zip(data["daily"]["time"], data["daily"]["temperature_2m_mean"])]
+        return pd.DataFrame({
+            "Datum": pd.to_datetime(data["hourly"]["time"]),
+            "Homerseklet_C": data["hourly"]["temperature_2m"],
+            "Paratartalom_szazalek": data["hourly"]["relative_humidity_2m"],
+            "Napsugarzas_W_m2": data["hourly"]["direct_radiation"],
+            "Szelsebesseg_kmh": data["hourly"]["wind_speed_10m"],
+            "Csapadek_mm": data["hourly"]["precipitation"]
+        })
     except:
         ma = magyar_ma()
-        return [{"datum": pd.to_datetime(ma + timedelta(days=i+1)), "homerseklet": 12.0}
-                for i in range(7)]
+        hours = [ma + timedelta(days=1, hours=h) for d in range(7) for h in range(24)]
+        return pd.DataFrame({"Datum": hours[:168], "Homerseklet_C": [20.0]*168,
+                            "Paratartalom_szazalek": [60.0]*168, "Napsugarzas_W_m2": [100.0]*168,
+                            "Szelsebesseg_kmh": [10.0]*168, "Csapadek_mm": [0.0]*168})
+
+@st.cache_data(ttl=600)
+def get_oras_load_history(_datum_kulcs=None):
+    if not ENTSOE_API_KEY:
+        return None
+    try:
+        client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+        ma = magyar_ma()
+        start = pd.Timestamp((ma - timedelta(days=8)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
+        end = pd.Timestamp(ma.strftime("%Y-%m-%d"), tz="Europe/Budapest")
+        load = client.query_load("HU", start=start, end=end)
+        if isinstance(load, pd.DataFrame):
+            load = load.iloc[:, 0]
+        return load
+    except:
+        return None
 
 @st.cache_data(ttl=300)
-@st.cache_data(ttl=600)
-def get_valos_kezdo_lag(_datum_kulcs=None):
+def get_dam_ar_oras(_datum_kulcs=None):
     if not ENTSOE_API_KEY:
-        return LAG_KEZDO, False
+        return 100.0, 100.0, False, None
     try:
         client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
         ma = magyar_ma()
-        ma = pd.Timestamp(ma).normalize()
-        for delta in [1, 2, 3]:
-            nap = ma - pd.Timedelta(days=delta)
-            try:
-                load = client.query_load("HU", start=nap, end=nap + pd.Timedelta(days=1))
-                s = load.iloc[:, 0].dropna()
-                if len(s) >= 20:
-                    return float(s.mean()), True
-            except:
-                continue
-        return LAG_KEZDO, False
-    except:
-        return LAG_KEZDO, False
-def get_dam_ar(_datum_kulcs=None):
-    if not ENTSOE_API_KEY:
-        return 104.93, 98.91, False
-    try:
-        client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
-        ma = magyar_ma()
-        legfrissebb = 104.93
-        for delta in [-1, -2, -3]:
-            try:
-                nap = ma + timedelta(days=delta)
-                start = pd.Timestamp(nap.strftime("%Y-%m-%d"), tz="Europe/Budapest")
-                end = start + pd.Timedelta(days=1)
-                dam = client.query_day_ahead_prices("HU", start=start, end=end)
-                if dam is not None and len(dam) > 0:
-                    dam_csucside = dam.between_time("08:00", "20:00")
-                    if len(dam_csucside) > 0:
-                        ertek = float(dam_csucside.mean())
-                    else:
-                        ertek = float(dam.mean())
-                    if ertek >= 20.0:
-                        legfrissebb = ertek
-                        break
-            except:
-                continue
+        holnap_start = pd.Timestamp((ma + timedelta(days=1)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
+        holnap_end = holnap_start + pd.Timedelta(days=1)
+        try:
+            dam_holnap = client.query_day_ahead_prices("HU", start=holnap_start, end=holnap_end)
+            dam_1nap = float(dam_holnap.mean())
+            holnap_oras = dam_holnap
+        except:
+            dam_1nap = 100.0
+            holnap_oras = None
         start_30 = pd.Timestamp((ma - timedelta(days=30)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
         end_30 = pd.Timestamp(ma.strftime("%Y-%m-%d"), tz="Europe/Budapest")
         dam_30 = client.query_day_ahead_prices("HU", start=start_30, end=end_30)
-        atlag_30 = float(dam_30.mean()) if dam_30 is not None and len(dam_30) > 0 else 98.91
-        if legfrissebb == 104.93:
-            legfrissebb = atlag_30
-        return legfrissebb, atlag_30, True
+        atlag_30 = float(dam_30.mean()) if dam_30 is not None and len(dam_30) > 0 else 100.0
+        return dam_1nap, atlag_30, True, holnap_oras
     except:
-        return 104.93, 98.91, False
+        return 100.0, 100.0, False, None
 
-def ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30, kezdo_lag=LAG_KEZDO):
+@st.cache_data(ttl=600)
+def get_megujulo_utolso_het(_datum_kulcs=None):
+    if not ENTSOE_API_KEY:
+        return 500.0, 200.0
+    try:
+        client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+        ma = magyar_ma()
+        start = pd.Timestamp((ma - timedelta(days=7)).strftime("%Y-%m-%d"), tz="Europe/Budapest")
+        end = pd.Timestamp(ma.strftime("%Y-%m-%d"), tz="Europe/Budapest")
+        gen = client.query_generation("HU", start=start, end=end)
+        solar_cols = [c for c in gen.columns if 'Solar' in str(c)]
+        wind_cols = [c for c in gen.columns if 'Wind' in str(c)]
+        nap_atlag = float(gen[solar_cols].sum(axis=1).mean()) if solar_cols else 500.0
+        szel_atlag = float(gen[wind_cols].sum(axis=1).mean()) if wind_cols else 200.0
+        return nap_atlag, szel_atlag
+    except:
+        return 500.0, 200.0
+
+# === ELŐREJELZÉS ===
+def oras_elorejelzes(idojaras_df, dam_1nap, dam_atlag_30, eur_huf, load_history, nap_atlag, szel_atlag, holnap_oras):
     eredmenyek = []
-    lag = kezdo_lag
-    for i, nap in enumerate(idojaras_lista):
-        datum = nap["datum"]
-        homerseklet = nap["homerseklet"]
-        dam_ar = dam_ar_1nap if i == 0 else dam_atlag_30
-        X = np.array([[lag, homerseklet, datum.weekday() + 1, datum.month, dam_ar,
-                        1 if datum.date() in hu_holidays else 0,
-                        1 if datum.weekday() >= 5 else 0,
-                        1 if homerseklet < -5 else 0,
-                        1 if homerseklet > 30 else 0]])
-        if homerseklet < -5:
-            X_sc = scaler_X_v2.transform(X)
-            X_t = torch.tensor(X_sc, dtype=torch.float32)
-            with torch.no_grad():
-                pred = model_v2(X_t)
-            josolt = float(scaler_y_v2.inverse_transform(pred.numpy())[0][0])
-            modell = "V2"
+    if load_history is not None and len(load_history) >= 168:
+        lag_buffer = list(load_history.values[-168:])
+    else:
+        lag_buffer = [4800.0] * 168
+
+    stl_std = stl_params.get("reziduum_std", 233.87)
+    stl_mean = stl_params.get("reziduum_atlag", -28.89)
+    last_seasonal = stl_seasonal.iloc[-168:].values.flatten() if len(stl_seasonal) >= 168 else [0]*168
+
+    for i, row in idojaras_df.iterrows():
+        datum = row["Datum"]
+        ora = datum.hour
+        if i < 24 and holnap_oras is not None and len(holnap_oras) > ora:
+            dam_ar = float(holnap_oras.iloc[ora]) if ora < len(holnap_oras) else dam_atlag_30
+        elif i < 24:
+            dam_ar = dam_1nap
         else:
-            X_sc = scaler_X_v1.transform(X)
-            X_t = torch.tensor(X_sc, dtype=torch.float32)
-            with torch.no_grad():
-                pred = model_v1(X_t)
-            josolt = float(scaler_y_v1.inverse_transform(pred.numpy())[0][0])
-            modell = "V1"
-        lag = josolt
-        eredmenyek.append({"datum": datum, "homerseklet": homerseklet,
-                           "fogyasztas": josolt, "dam_ar": dam_ar,
-                           "modell": modell, "riado": josolt >= RIADOKUSZOB})
+            dam_ar = dam_atlag_30
+
+        lag1h = lag_buffer[-1]
+        lag24h = lag_buffer[-24] if len(lag_buffer) >= 24 else lag1h
+        lag168h = lag_buffer[-168] if len(lag_buffer) >= 168 else lag1h
+
+        X = np.array([[dam_ar, row["Homerseklet_C"], row["Paratartalom_szazalek"],
+                       row["Napsugarzas_W_m2"], row["Szelsebesseg_kmh"], row["Csapadek_mm"],
+                       eur_huf, ora, datum.weekday() + 1, datum.month,
+                       1 if datum.date() in hu_holidays else 0,
+                       1 if datum.weekday() >= 5 else 0,
+                       1 if row["Homerseklet_C"] < -5 else 0,
+                       1 if row["Homerseklet_C"] > 30 else 0,
+                       lag1h, lag24h, lag168h,
+                       nap_atlag if row["Napsugarzas_W_m2"] > 50 else 0,
+                       szel_atlag]])
+
+        josolt = float(model.predict(X)[0])
+        josolt = max(josolt, 2000)
+
+        seasonal_idx = i % len(last_seasonal)
+        reziduum = josolt - last_seasonal[seasonal_idx]
+        riado = abs(reziduum - stl_mean) > 2 * stl_std
+
+        lag_buffer.append(josolt)
+
+        eredmenyek.append({
+            "datum": datum, "ora": ora, "homerseklet": row["Homerseklet_C"],
+            "fogyasztas": josolt, "dam_ar": dam_ar,
+            "koltseg_mft": josolt * dam_ar * eur_huf / 1_000_000,
+            "riado": riado, "reziduum": reziduum,
+            "napsugarzas": row["Napsugarzas_W_m2"],
+            "szelsebesseg": row["Szelsebesseg_kmh"]
+        })
     return eredmenyek
 
+# === PLOTLY CHART ALAP ===
 def plotly_chart(adatok_json, layout_json, chart_id, height=420):
     return f"""<!DOCTYPE html>
 <html>
@@ -347,15 +322,11 @@ body {{ background:#0a1628; overflow:hidden; }}
         return finalData.map(function(trace) {{
             var t = JSON.parse(JSON.stringify(trace));
             if (t.y) t.y = t.y.map(function() {{ return 0; }});
-            if (t.text) {{
-                t.text = t.text.map(function() {{ return ''; }});
-            }}
+            if (t.text) {{ t.text = t.text.map(function() {{ return ''; }}); }}
             return t;
         }});
     }}
-    function easeOutCubic(t) {{
-        return 1 - Math.pow(1 - t, 3);
-    }}
+    function easeOutCubic(t) {{ return 1 - Math.pow(1 - t, 3); }}
     function isVisible() {{
         if (document.hidden) return false;
         var rect = chartEl.getBoundingClientRect();
@@ -376,9 +347,7 @@ body {{ background:#0a1628; overflow:hidden; }}
                     var animData = finalData.map(function(trace) {{
                         var copy = JSON.parse(JSON.stringify(trace));
                         if (copy.y) copy.y = copy.y.map(function(v) {{ return v * eased; }});
-                        if (copy.text && t < 0.9) {{
-                            copy.text = copy.text.map(function() {{ return ''; }});
-                        }}
+                        if (copy.text && t < 0.9) {{ copy.text = copy.text.map(function() {{ return ''; }}); }}
                         return copy;
                     }});
                     Plotly.react('{chart_id}', animData, layout, config);
@@ -395,12 +364,8 @@ body {{ background:#0a1628; overflow:hidden; }}
     Plotly.newPlot('{chart_id}', makeStartData(), layout, config).then(function() {{
         setInterval(function() {{
             var vis = isVisible();
-            if (vis && !lastVisible) {{
-                setTimeout(runAnimation, START_DELAY);
-            }}
-            if (!vis && animDone) {{
-                animDone = false;
-            }}
+            if (vis && !lastVisible) {{ setTimeout(runAnimation, START_DELAY); }}
+            if (!vis && animDone) {{ animDone = false; }}
             lastVisible = vis;
         }}, 300);
     }});
@@ -409,59 +374,47 @@ body {{ background:#0a1628; overflow:hidden; }}
 </body>
 </html>"""
 
-def fogyasztas_chart(datumok, fogyasztasok_gwh, modellek, riadok, eur_huf, height=420):
+# === CHART FÜGGVÉNYEK ===
+def napi_fogyasztas_chart(datumok, fogyasztasok_gwh, riadok, height=420):
     colors = ["#FF6600" if r else "#0066CC" for r in riadok]
-    feliratok = [f"{v:.1f} ({m})" for v, m in zip(fogyasztasok_gwh, modellek)]
+    feliratok = [f"{v:.1f}" for v in fogyasztasok_gwh]
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
-    kuszob_gwh = RIADOKUSZOB * 24 / 1000
     adatok = json.dumps([{
         "type": "bar", "x": datumok, "y": fogyasztasok_gwh,
         "marker": {"color": colors, "opacity": 0.9},
         "text": feliratok, "textposition": "outside",
         "textfont": {"color": "#ffffff", "size": 11},
-        "hovertemplate": "%{x}<br>%{text}<extra></extra>",
+        "hovertemplate": "%{x}<br>%{y:.1f} GWh<extra></extra>",
         "name": "Fogyasztás", "cliponaxis": False
     }])
     layout = json.dumps({
         "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
-        "title": {"text": "7 napos fogyasztás előrejelzés (GWh)",
+        "title": {"text": "7 napos napi fogyasztás előrejelzés (GWh)",
                   "font": {"size": 14, "color": "#f1f5f9"}},
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "GWh", "color": "#cbd5e1",
-                  "range": [0, max(max(fogyasztasok_gwh) * 1.25, kuszob_gwh * 1.05)]},
-        "bargap": 0.55, "showlegend": False,
-        "shapes": [{"type": "line", "xref": "paper", "x0": 0, "x1": 1,
-                    "y0": kuszob_gwh, "y1": kuszob_gwh,
-                    "line": {"color": "#FF6600", "width": 2, "dash": "dash"}}],
-        "annotations": [{"xref": "paper", "x": 0.5, "y": kuszob_gwh,
-                         "text": f"Riasztási küszöb ({kuszob_gwh:.1f} GWh)",
-                         "showarrow": False, "font": {"color": "#FF6600", "size": 10},
-                         "yanchor": "bottom",
-                         "bgcolor": "#0a1628", "borderpad": 2}]
+                  "range": [0, max(fogyasztasok_gwh) * 1.25]},
+        "bargap": 0.55, "showlegend": False
     })
-    return plotly_chart(adatok, layout, "fogyasztas", height)
+    return plotly_chart(adatok, layout, "napi_fogyasztas", height)
 
-def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
+def napi_koltseg_chart(datumok, koltsegek, eur_huf, height=420):
     x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
     x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
     adatok = json.dumps([{
-        "type": "scatter", "x": datumok, "y": koltsegek,
-        "mode": "lines+markers+text",
+        "type": "scatter", "x": datumok, "y": koltsegek, "mode": "lines+markers+text",
         "line": {"color": "#FF6600", "width": 3},
         "marker": {"size": 10, "color": "#FF6600", "line": {"color": "#ffffff", "width": 2}},
         "fill": "tozeroy", "fillcolor": "rgba(255,102,0,0.15)",
-        "text": [f"{v:.1f}" for v in koltsegek],
-        "textposition": "top center",
+        "text": [f"{v:.0f}" for v in koltsegek], "textposition": "top center",
         "textfont": {"color": "#ffffff", "size": 10},
-        "hovertemplate": "%{x}<br>%{y:.1f} M Ft<extra></extra>",
+        "hovertemplate": "%{x}<br>%{y:.0f} M Ft<extra></extra>",
         "name": "Költség", "cliponaxis": False
     }])
-    y_min = min(koltsegek) * 0.80
-    y_max = max(koltsegek) * 1.20
     layout = json.dumps({
         "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
@@ -471,48 +424,79 @@ def koltseg_chart(datumok, koltsegek, eur_huf, height=420):
         "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
                   "range": [x_min, x_max], "type": "date"},
         "yaxis": {"gridcolor": "#1e3a5f", "title": "Millió Ft", "color": "#cbd5e1",
-                  "range": [y_min, y_max]},
+                  "range": [min(koltsegek)*0.8, max(koltsegek)*1.2]},
         "showlegend": False
     })
-    return plotly_chart(adatok, layout, "koltseg", height)
+    return plotly_chart(adatok, layout, "napi_koltseg", height)
 
-def homerseklet_chart(datumok, homersekletek, height=420):
-    x_min = (pd.to_datetime(datumok[0]) - pd.Timedelta(hours=18)).isoformat()
-    x_max = (pd.to_datetime(datumok[-1]) + pd.Timedelta(hours=18)).isoformat()
+def oras_fogyasztas_chart(datumok, fogyasztasok, riadok, height=420):
+    colors = ["#FF6600" if r else "#0066CC" for r in riadok]
     adatok = json.dumps([{
-        "type": "scatter", "x": datumok, "y": homersekletek,
-        "mode": "lines+markers+text",
-        "line": {"color": "#10b981", "width": 3},
-        "marker": {"size": 10, "color": "#10b981", "line": {"color": "#ffffff", "width": 2}},
-        "fill": "tozeroy", "fillcolor": "rgba(16,185,129,0.15)",
-        "text": [f"{v:.1f}°" for v in homersekletek],
-        "textposition": "top center",
-        "textfont": {"color": "#ffffff", "size": 10},
-        "hovertemplate": "%{x}<br>%{y:.1f}°C<extra></extra>",
-        "name": "Hőmérséklet", "cliponaxis": False
+        "type": "scatter", "x": datumok, "y": fogyasztasok, "mode": "lines",
+        "line": {"color": "#0066CC", "width": 2},
+        "fill": "tozeroy", "fillcolor": "rgba(0,102,204,0.15)",
+        "hovertemplate": "%{x}<br>%{y:.0f} MWh<extra></extra>",
+        "name": "Fogyasztás"
+    }, {
+        "type": "scatter", "x": [d for d, r in zip(datumok, riadok) if r],
+        "y": [f for f, r in zip(fogyasztasok, riadok) if r],
+        "mode": "markers", "marker": {"color": "#FF6600", "size": 8, "symbol": "diamond"},
+        "hovertemplate": "%{x}<br>%{y:.0f} MWh (STL riasztás)<extra></extra>",
+        "name": "STL riasztás"
     }])
     layout = json.dumps({
         "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
         "font": {"color": "#cbd5e1", "family": "Inter"},
-        "title": {"text": "Hőmérséklet előrejelzés (°C)",
+        "title": {"text": "168 órás fogyasztás előrejelzés (MWh) — STL riasztással",
                   "font": {"size": 14, "color": "#f1f5f9"}},
         "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
-        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d", "color": "#cbd5e1",
-                  "range": [x_min, x_max], "type": "date"},
-        "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1",
-                  "range": [min(homersekletek) - 5, max(homersekletek) + 6]},
-        "showlegend": False,
-        "shapes": [{"type": "line", "xref": "paper", "x0": 0, "x1": 1,
-                    "y0": -5, "y1": -5,
-                    "line": {"color": "#FF6600", "width": 1.5, "dash": "dot"}}],
-        "annotations": [{"xref": "paper", "x": 0.98, "y": -5,
-                         "text": "Extrém hideg (-5°C)",
-                         "showarrow": False, "font": {"color": "#FF6600", "size": 10},
-                         "yanchor": "top", "xanchor": "right",
-                         "bgcolor": "#0a1628", "borderpad": 2}]
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d %H:%M", "color": "#cbd5e1"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "MWh", "color": "#cbd5e1"},
+        "showlegend": True, "legend": {"font": {"color": "#cbd5e1"}}
     })
-    return plotly_chart(adatok, layout, "homerseklet", height)
+    return plotly_chart(adatok, layout, "oras_fogyasztas", height)
 
+def oras_homerseklet_chart(datumok, homersekletek, height=420):
+    adatok = json.dumps([{
+        "type": "scatter", "x": datumok, "y": homersekletek, "mode": "lines",
+        "line": {"color": "#10b981", "width": 2},
+        "fill": "tozeroy", "fillcolor": "rgba(16,185,129,0.15)",
+        "hovertemplate": "%{x}<br>%{y:.1f}°C<extra></extra>",
+        "name": "Hőmérséklet"
+    }])
+    layout = json.dumps({
+        "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
+        "font": {"color": "#cbd5e1", "family": "Inter"},
+        "title": {"text": "168 órás hőmérséklet előrejelzés (°C)",
+                  "font": {"size": 14, "color": "#f1f5f9"}},
+        "margin": {"l": 100, "r": 80, "t": 70, "b": 50},
+        "xaxis": {"gridcolor": "#1e3a5f", "tickformat": "%m.%d %H:%M", "color": "#cbd5e1"},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "°C", "color": "#cbd5e1"},
+        "showlegend": False
+    })
+    return plotly_chart(adatok, layout, "oras_homerseklet", height)
+
+def negativ_arak_chart(neg_df, height=420):
+    adatok = json.dumps([{
+        "type": "bar", "x": neg_df["Ev_Honap"].tolist(), "y": neg_df["negativ_ora"].tolist(),
+        "marker": {"color": ["#FF6600" if v > 10 else "#0066CC" for v in neg_df["negativ_ora"]], "opacity": 0.9},
+        "hovertemplate": "%{x}<br>%{y} negatív óra<extra></extra>",
+        "name": "Negatív órák"
+    }])
+    layout = json.dumps({
+        "paper_bgcolor": "#0a1628", "plot_bgcolor": "#0f2040",
+        "font": {"color": "#cbd5e1", "family": "Inter"},
+        "title": {"text": "Negatív DAM árak havi trendje (2015–2026) — napelemes túltermelés hatása",
+                  "font": {"size": 14, "color": "#f1f5f9"}},
+        "margin": {"l": 80, "r": 40, "t": 70, "b": 80},
+        "xaxis": {"gridcolor": "#1e3a5f", "color": "#cbd5e1", "tickangle": -45,
+                  "dtick": 6},
+        "yaxis": {"gridcolor": "#1e3a5f", "title": "Negatív órák száma / hónap", "color": "#cbd5e1"},
+        "bargap": 0.3, "showlegend": False
+    })
+    return plotly_chart(adatok, layout, "negativ_arak", height)
+
+# === FEJLÉC ===
 st.markdown("""
 <div style="background:linear-gradient(135deg,#003366 0%,#0055aa 100%);
             padding:20px 32px; border-radius:12px; margin-bottom:16px;
@@ -527,303 +511,222 @@ st.markdown("""
         <div>
             <div style="font-family:Montserrat,sans-serif; font-size:26px;
                         font-weight:800; color:#ffffff; letter-spacing:1px;">
-                MVM Energiafogyasztás Előrejelző
+                MVM Energiafogyasztás Előrejelző V3
             </div>
             <div style="font-family:Inter,sans-serif; font-size:13px;
                         color:#93c5fd; margin-top:4px; letter-spacing:0.5px;">
-                CrewAI + PyTorch Ensemble (V1 + V2) &nbsp;|&nbsp; 7 napos előrejelzés &nbsp;|&nbsp; Azure PostgreSQL
+                XGBoost (FLAML AutoML) &nbsp;|&nbsp; 168 órás előrejelzés &nbsp;|&nbsp; STL anomáliadetekció
             </div>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["📊 Napi Predikció", "📅 Korábbi jóslatok"])
+# === FŐTABOK ===
+tab1, tab2, tab3 = st.tabs(["📊 Napi Összesítés", "⏱️ Órás Bontás", "⚡ Negatív Árak"])
 
-with tab1:
-    col_gomb, col_allapot = st.columns([1, 3])
-    with col_gomb:
-        frissit = st.button("🔄 Előrejelzés frissítése", type="primary")
-    with col_allapot:
-        allapot_ph = st.empty()
+# === ADATLEKÉRÉS ===
+col_gomb, col_allapot = st.columns([1, 3])
+with col_gomb:
+    frissit = st.button("🔄 Előrejelzés frissítése", type="primary")
+with col_allapot:
+    allapot_ph = st.empty()
 
-    if frissit:
+if frissit:
+    st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
+    get_eur_huf.clear()
+    get_oras_idojaras.clear()
+    get_dam_ar_oras.clear()
+    get_oras_load_history.clear()
+    get_megujulo_utolso_het.clear()
+    st.session_state.pop("eredmenyek", None)
+    st.rerun()
+
+if "eredmenyek" not in st.session_state:
+    with st.spinner("Adatok lekérése (ENTSO-E, Open-Meteo, ECB)..."):
+        ora_kulcs = magyar_ma().strftime("%Y-%m-%d-%H")
+        eur_huf = get_eur_huf(_datum_kulcs=ora_kulcs)
+        idojaras_df = get_oras_idojaras(_datum_kulcs=ora_kulcs)
+        dam_1nap, dam_atlag_30, dam_valodi, holnap_oras = get_dam_ar_oras(_datum_kulcs=ora_kulcs)
+        load_history = get_oras_load_history(_datum_kulcs=ora_kulcs)
+        nap_atlag, szel_atlag = get_megujulo_utolso_het(_datum_kulcs=ora_kulcs)
+        eredmenyek = oras_elorejelzes(idojaras_df, dam_1nap, dam_atlag_30, eur_huf,
+                                       load_history, nap_atlag, szel_atlag, holnap_oras)
+        st.session_state.eredmenyek = eredmenyek
+        st.session_state.eur_huf = eur_huf
+        st.session_state.dam_1nap = dam_1nap
+        st.session_state.dam_atlag_30 = dam_atlag_30
         st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
-        get_eur_huf.clear()
-        get_idojaras.clear()
-        get_dam_ar.clear()
-        for key in ["eredmenyek", "eur_huf", "dam_ar_1nap", "dam_atlag_30", "dam_valodi", "db_mentes_uzenet"]:
-            st.session_state.pop(key, None)
-        st.rerun()
 
-    if "eredmenyek" not in st.session_state:
-        with st.spinner("Adatok lekérése..."):
-            ora_kulcs = magyar_ma().strftime("%Y-%m-%d-%H")
-            eur_huf = get_eur_huf(_datum_kulcs=ora_kulcs)
-            idojaras_lista = get_idojaras(datum_kulcs=ora_kulcs)
-            dam_ar_1nap, dam_atlag_30, dam_valodi = get_dam_ar(_datum_kulcs=ora_kulcs)
-            kezdo_lag, lag_valodi = get_valos_kezdo_lag(_datum_kulcs=ora_kulcs)
-            eredmenyek = ensemble_joslas(idojaras_lista, dam_ar_1nap, dam_atlag_30, kezdo_lag)
-            st.session_state.eredmenyek = eredmenyek
-            st.session_state.eur_huf = eur_huf
-            st.session_state.dam_ar_1nap = dam_ar_1nap
-            st.session_state.dam_atlag_30 = dam_atlag_30
-            st.session_state.dam_valodi = dam_valodi
-            st.session_state.frissites_ideje = pd.Timestamp.now(tz="Europe/Budapest").strftime("%Y-%m-%d %H:%M:%S")
-            siker, uzenet = ments_db_be(eredmenyek, eur_huf)
-            st.session_state.db_mentes_uzenet = (siker, uzenet)
+if "frissites_ideje" in st.session_state:
+    allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
 
-    if "frissites_ideje" in st.session_state:
-        allapot_ph.success(f"✅ Frissítve: {st.session_state.frissites_ideje}")
+# === ADATOK FELDOLGOZÁSA ===
+if "eredmenyek" in st.session_state:
+    eredmenyek = st.session_state.eredmenyek
+    eur_huf = st.session_state.eur_huf
+    dam_1nap = st.session_state.dam_1nap
+    dam_atlag_30 = st.session_state.dam_atlag_30
 
-    if "db_mentes_uzenet" in st.session_state:
-        siker, uzenet = st.session_state.db_mentes_uzenet
-        if uzenet:
-            if siker:
-                st.markdown(f"""
-                <div style="background:#0a1628; border:1px solid #10b981; border-radius:8px;
-                            padding:8px 16px; margin-bottom:12px; text-align:center;">
-                    <span style="color:#10b981; font-weight:600; font-family:Montserrat,sans-serif;">
-                    💾 Adatbázis: {uzenet}</span>
-                </div>""", unsafe_allow_html=True)
-            else:
+    edf = pd.DataFrame(eredmenyek)
+    edf["datum"] = pd.to_datetime(edf["datum"])
+    edf["nap"] = edf["datum"].dt.date
+
+    # Napi aggregálás
+    napi = edf.groupby("nap").agg(
+        fogyasztas_gwh=("fogyasztas", lambda x: x.sum() / 1000),
+        koltseg_mft=("koltseg_mft", "sum"),
+        homerseklet_atlag=("homerseklet", "mean"),
+        riado_orak=("riado", "sum"),
+        max_ora_fogyasztas=("fogyasztas", "max"),
+        min_ora_fogyasztas=("fogyasztas", "min")
+    ).reset_index()
+    napi["riado"] = napi["riado_orak"] > 0
+
+    # Modell infó
+    st.markdown(f"""
+    <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
+                padding:8px 16px; margin-bottom:12px; text-align:center;">
+        <span style="color:#10b981; font-weight:600; font-family:Montserrat,sans-serif;">
+        Aktív modell: XGBoost (FLAML AutoML) — 168 órás előrejelzés &nbsp;|&nbsp; STL anomáliadetekció</span>
+    </div>""", unsafe_allow_html=True)
+
+    # === KÁRTYÁK ===
+    heti_fogyasztas_gwh = napi["fogyasztas_gwh"].sum()
+    heti_koltseg = napi["koltseg_mft"].sum()
+    max_nap = napi.loc[napi["fogyasztas_gwh"].idxmax()]
+    min_nap = napi.loc[napi["fogyasztas_gwh"].idxmin()]
+    riado_napok = napi[napi["riado"]]
+    riado_ertek = ", ".join([str(n) for n in riado_napok["nap"]]) if len(riado_napok) > 0 else "Nincs"
+    riado_szin = "#FF6600" if len(riado_napok) > 0 else "#10b981"
+    riado_ikon = "🚨" if len(riado_napok) > 0 else "✅"
+    stl_riado_orak = int(edf["riado"].sum())
+
+    st.markdown(f"""
+    <div class="kartya-sor">
+      <div class="kartya">
+        <div class="kartya-cim">⚡ Heti fogyasztás</div>
+        <div class="kartya-ertek">{heti_fogyasztas_gwh:.1f} GWh</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">💰 Heti költség</div>
+        <div class="kartya-ertek">{heti_koltseg/1000:.1f} Mrd Ft</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">📈 Csúcs nap</div>
+        <div class="kartya-ertek">{max_nap['fogyasztas_gwh']:.1f} GWh</div>
+        <div class="kartya-sub">{max_nap['nap']}</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">📉 Minimum nap</div>
+        <div class="kartya-ertek">{min_nap['fogyasztas_gwh']:.1f} GWh</div>
+        <div class="kartya-sub">{min_nap['nap']}</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">🏦 DAM valódi</div>
+        <div class="kartya-ertek">{dam_1nap:.2f} EUR/MWh</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">🏦 DAM 30 napos</div>
+        <div class="kartya-ertek">{dam_atlag_30:.2f} EUR/MWh</div>
+        <div class="kartya-sub">30 napos átlag</div>
+      </div>
+      <div class="kartya">
+        <div class="kartya-cim">💱 EUR/HUF</div>
+        <div class="kartya-ertek">{eur_huf:.1f} Ft</div>
+      </div>
+      <div class="kartya" style="border-color:{riado_szin};">
+        <div class="kartya-cim">{riado_ikon} STL Riasztás</div>
+        <div class="kartya-ertek" style="color:{riado_szin};">{stl_riado_orak} óra</div>
+        <div class="kartya-sub">z-score > 2σ</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # === TAB 1: NAPI ÖSSZESÍTÉS ===
+    with tab1:
+        datumok_napi = [str(n) for n in napi["nap"]]
+        gt1, gt2 = st.tabs(["📊 Fogyasztás", "💰 Költség"])
+        with gt1:
+            components.html(
+                napi_fogyasztas_chart(datumok_napi, napi["fogyasztas_gwh"].tolist(),
+                                     napi["riado"].tolist()),
+                height=440, scrolling=False)
+        with gt2:
+            components.html(
+                napi_koltseg_chart(datumok_napi, napi["koltseg_mft"].tolist(), eur_huf),
+                height=440, scrolling=False)
+
+    # === TAB 2: ÓRÁS BONTÁS ===
+    with tab2:
+        datumok_oras = [d.strftime("%Y-%m-%d %H:%M") for d in edf["datum"]]
+        ot1, ot2 = st.tabs(["⚡ Fogyasztás + STL", "🌡️ Hőmérséklet"])
+        with ot1:
+            components.html(
+                oras_fogyasztas_chart(datumok_oras, edf["fogyasztas"].tolist(),
+                                     edf["riado"].tolist()),
+                height=440, scrolling=False)
+            if stl_riado_orak > 0:
+                riado_df = edf[edf["riado"]][["datum", "fogyasztas", "reziduum"]].copy()
+                riado_df["datum"] = riado_df["datum"].dt.strftime("%m.%d %H:%M")
+                riado_df["reziduum"] = riado_df["reziduum"].round(1)
+                riado_df.columns = ["Időpont", "Fogyasztás (MWh)", "Reziduum (MWh)"]
                 st.markdown(f"""
                 <div style="background:#0a1628; border:1px solid #FF6600; border-radius:8px;
-                            padding:8px 16px; margin-bottom:12px; text-align:center;">
-                    <span style="color:#FF6600; font-weight:600; font-family:Montserrat,sans-serif;">
-                    ⚠️ Adatbázis: {uzenet}</span>
+                            padding:12px 16px; margin:8px 0;">
+                    <span style="color:#FF6600; font-weight:600;">
+                    🚨 {stl_riado_orak} órában az STL reziduum meghaladja a 2σ küszöböt
+                    (σ = {stl_params.get('reziduum_std', 233.87):.0f} MWh)</span>
                 </div>""", unsafe_allow_html=True)
+                st.dataframe(riado_df, use_container_width=True, hide_index=True)
+        with ot2:
+            components.html(
+                oras_homerseklet_chart(datumok_oras, edf["homerseklet"].tolist()),
+                height=440, scrolling=False)
 
-    if "eredmenyek" in st.session_state:
-        eredmenyek = st.session_state.eredmenyek
-        eur_huf = st.session_state.eur_huf
-        dam_ar_1nap = st.session_state.dam_ar_1nap
-        dam_atlag_30 = st.session_state.dam_atlag_30
-        dam_valodi = st.session_state.get("dam_valodi", False)
-
-        datumok = [e["datum"].strftime("%Y-%m-%d") for e in eredmenyek]
-        fogyasztasok_gwh = [e["fogyasztas"] * 24 / 1000 for e in eredmenyek]
-        homersekletek = [e["homerseklet"] for e in eredmenyek]
-        modellek_lista = [e["modell"] for e in eredmenyek]
-        koltsegek = [e["fogyasztas"] * 24 * e["dam_ar"] * eur_huf / 1_000_000 for e in eredmenyek]
-        riadok = [e["riado"] for e in eredmenyek]
-
-        heti_fogyasztas_gwh = sum(fogyasztasok_gwh)
-        heti_koltseg = sum(koltsegek)
-        max_idx = max(range(len(eredmenyek)), key=lambda i: eredmenyek[i]["fogyasztas"])
-        min_idx = min(range(len(eredmenyek)), key=lambda i: eredmenyek[i]["fogyasztas"])
-        max_nap = eredmenyek[max_idx]
-        min_nap = eredmenyek[min_idx]
-        max_fog_gwh = fogyasztasok_gwh[max_idx]
-        min_fog_gwh = fogyasztasok_gwh[min_idx]
-        riado_napok = [e for e in eredmenyek if e["riado"]]
-        v1 = sum(1 for e in eredmenyek if e["modell"] == "V1")
-        v2 = sum(1 for e in eredmenyek if e["modell"] == "V2")
-        kuszob_gwh = RIADOKUSZOB * 24 / 1000
-
-        if v2 > 0:
-            modell_szin = "#FF6600"
-            modell_szoveg = f"Aktív modell: V2 — {v2} nap (extrém hideg) | V1 — {v1} nap"
-        else:
-            modell_szin = "#10b981"
-            modell_szoveg = f"Aktív modell: V1 — mind a {v1} nap (normál időjárás)"
+    # === TAB 3: NEGATÍV ÁRAK ===
+    with tab3:
+        osszes_neg = int(neg_summary["negativ_ora"].sum())
+        utolso_ev = neg_summary[neg_summary["Ev_Honap"] >= "2025-01"]
+        utolso_ev_neg = int(utolso_ev["negativ_ora"].sum()) if len(utolso_ev) > 0 else 0
+        legrosszabb = neg_summary.loc[neg_summary["negativ_ora"].idxmax()]
 
         st.markdown(f"""
-        <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
-                    padding:8px 16px; margin-bottom:12px; text-align:center;">
-            <span style="color:{modell_szin}; font-weight:600; font-family:Montserrat,sans-serif;">
-            {modell_szoveg}</span>
-        </div>""", unsafe_allow_html=True)
-
-        elso3_fog = sum(fogyasztasok_gwh[:3]) / 3
-        utolso3_fog = sum(fogyasztasok_gwh[-3:]) / 3
-        trend_fog = "▲" if utolso3_fog > elso3_fog else "▼"
-        trend_fog_szin = "#FF6600" if utolso3_fog > elso3_fog else "#10b981"
-
-        elso3_kolt = sum(koltsegek[:3]) / 3
-        utolso3_kolt = sum(koltsegek[-3:]) / 3
-        trend_koltseg = "▲" if utolso3_kolt > elso3_kolt else "▼"
-        trend_koltseg_szin = "#FF6600" if utolso3_kolt > elso3_kolt else "#10b981"
-
-        trend_dam = "▲" if dam_ar_1nap > dam_atlag_30 else "▼"
-        trend_dam_szin = "#FF6600" if dam_ar_1nap > dam_atlag_30 else "#10b981"
-
-        riado_ertek = ", ".join([e["datum"].strftime("%m.%d") for e in riado_napok]) if riado_napok else "Nincs"
-        riado_szin = "#FF6600" if riado_napok else "#10b981"
-        riado_ikon = "🚨" if riado_napok else "✅"
-
-        fog_valt = ((utolso3_fog - elso3_fog) / elso3_fog) * 100
-        kolt_valt = ((utolso3_kolt - elso3_kolt) / elso3_kolt) * 100
-        dam_valt = ((dam_ar_1nap - dam_atlag_30) / dam_atlag_30) * 100
-
-        tooltip_fog = f"Heti fogyasztás trend: első 3 nap átlaga ({elso3_fog:.1f} GWh) vs utolsó 3 nap átlaga ({utolso3_fog:.1f} GWh), változás: {fog_valt:+.1f}%"
-        tooltip_kolt = f"Heti költség trend: első 3 nap átlaga ({elso3_kolt:.0f} M Ft) vs utolsó 3 nap átlaga ({utolso3_kolt:.0f} M Ft), változás: {kolt_valt:+.1f}%"
-        tooltip_dam = f"DAM ár vs 30 napos átlag: holnapi ({dam_ar_1nap:.2f}) vs 30 napos ({dam_atlag_30:.2f} EUR/MWh), változás: {dam_valt:+.1f}%"
-
-        st.markdown(f"""
-        <div class="kartya-sor">
+        <div class="kartya-sor" style="grid-template-columns: repeat(4, 1fr);">
           <div class="kartya">
-            <div class="kartya-cim">⚡ Heti fogyasztás</div>
-            <div class="kartya-ertek">{heti_fogyasztas_gwh:.1f} GWh</div>
-            <div class="kartya-trend" style="color:{trend_fog_szin};" title="{tooltip_fog}">{trend_fog} heti trend</div>
+            <div class="kartya-cim">📊 Összes negatív óra</div>
+            <div class="kartya-ertek">{osszes_neg}</div>
+            <div class="kartya-sub">2015–2026</div>
           </div>
           <div class="kartya">
-            <div class="kartya-cim">💰 Heti költség</div>
-            <div class="kartya-ertek">{heti_koltseg/1000:.1f} Mrd Ft</div>
-            <div class="kartya-trend" style="color:{trend_koltseg_szin};" title="{tooltip_kolt}">{trend_koltseg} heti trend</div>
+            <div class="kartya-cim">📈 2025–2026 negatív óra</div>
+            <div class="kartya-ertek">{utolso_ev_neg}</div>
+            <div class="kartya-sub">utolsó 18 hónap</div>
           </div>
           <div class="kartya">
-            <div class="kartya-cim">📈 Csúcs</div>
-            <div class="kartya-ertek">{max_fog_gwh:.1f} GWh</div>
-            <div class="kartya-sub">{max_nap['datum'].strftime('%m.%d')}</div>
+            <div class="kartya-cim">📉 Legrosszabb hónap</div>
+            <div class="kartya-ertek">{int(legrosszabb['negativ_ora'])} óra</div>
+            <div class="kartya-sub">{legrosszabb['Ev_Honap']}</div>
           </div>
           <div class="kartya">
-            <div class="kartya-cim">📉 Minimum</div>
-            <div class="kartya-ertek">{min_fog_gwh:.1f} GWh</div>
-            <div class="kartya-sub">{min_nap['datum'].strftime('%m.%d')}</div>
-          </div>
-          <div class="kartya">
-            <div class="kartya-cim">🏦 DAM valódi</div>
-            <div class="kartya-ertek">{dam_ar_1nap:.2f} EUR/MWh</div>
-            <div class="kartya-trend" style="color:{trend_dam_szin};" title="{tooltip_dam}">{trend_dam} vs 30 napos</div>
-          </div>
-          <div class="kartya">
-            <div class="kartya-cim">🏦 DAM 30 napos</div>
-            <div class="kartya-ertek">{dam_atlag_30:.2f} EUR/MWh</div>
-            <div class="kartya-sub">30 napos átlag</div>
-          </div>
-          <div class="kartya">
-            <div class="kartya-cim">💱 EUR/HUF</div>
-            <div class="kartya-ertek">{eur_huf:.1f} Ft</div>
-            <div class="kartya-sub">MNB középárfolyam</div>
-          </div>
-          <div class="kartya" style="border-color:{'#FF6600' if riado_napok else '#1e3a5f'};">
-            <div class="kartya-cim">{riado_ikon} Riasztás</div>
-            <div class="kartya-ertek" style="color:{riado_szin};">{riado_ertek}</div>
-            <div class="kartya-sub">küszöb: {kuszob_gwh:.1f} GWh</div>
+            <div class="kartya-cim">⚠️ Legmélyebb ár</div>
+            <div class="kartya-ertek">{neg_summary['min_ar'].min():.0f} EUR/MWh</div>
+            <div class="kartya-sub">HUPX padlóár</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<div id='grafikon-fogyasztas' style='margin-top:12px;'></div>", unsafe_allow_html=True)
+        components.html(
+            negativ_arak_chart(neg_summary),
+            height=480, scrolling=False)
 
-        gt1, gt2, gt3, gt4 = st.tabs([
-            "📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet", "📈 Összes grafikon"])
-
-        with gt1:
-            components.html(
-                fogyasztas_chart(datumok, fogyasztasok_gwh, modellek_lista, riadok, eur_huf),
-                height=440, scrolling=False)
-
-        with gt2:
-            components.html(
-                koltseg_chart(datumok, koltsegek, eur_huf),
-                height=440, scrolling=False)
-
-        with gt3:
-            components.html(
-                homerseklet_chart(datumok, homersekletek),
-                height=440, scrolling=False)
-
-        with gt4:
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                components.html(
-                    fogyasztas_chart(datumok, fogyasztasok_gwh, modellek_lista, riadok, eur_huf, height=300),
-                    height=320, scrolling=False)
-            with c2:
-                components.html(
-                    koltseg_chart(datumok, koltsegek, eur_huf, height=300),
-                    height=320, scrolling=False)
-            with c3:
-                components.html(
-                    homerseklet_chart(datumok, homersekletek, height=300),
-                    height=320, scrolling=False)
-    else:
-        st.info("Kattints az Előrejelzés frissítése gombra!")
-
-with tab2:
-    st.markdown("### 📅 Korábbi jóslatok az adatbázisból")
-    
-    elerheto_datumok = db_osszes_datum()
-    
-    if not elerheto_datumok:
-        st.info("ℹ️ Még nincsenek mentett jóslatok az adatbázisban. Az automatikus mentés akkor indul, "
-                "amikor a 'Napi Predikció' tab-on új jóslat készül.")
-    else:
-        st.markdown(f"**{len(elerheto_datumok)} jóslási nap** elérhető az adatbázisban.")
-        col_d, col_b = st.columns([2, 1])
-        with col_d:
-            valasztott_datum = st.selectbox(
-                "Válassz jóslási dátumot:",
-                options=elerheto_datumok,
-                label_visibility="collapsed",
-                key="datum_selectbox"
-            )
-        with col_b:
-            betoltes = st.button("📂 Betöltés", key="betoltes_gomb")
-        
-        if betoltes and valasztott_datum:
-            sorok, hiba = olvas_db_bol(valasztott_datum)
-            if hiba:
-                st.error(f"Hiba: {hiba}")
-            elif not sorok:
-                st.warning("Nincs adat erre a dátumra.")
-            else:
-                st.success(f"✅ {len(sorok)} sor betöltve a {valasztott_datum} jóslásból")
-                
-                df = pd.DataFrame(sorok)
-                df = df.sort_values("cel_datuma")
-                
-                datumok_t = [str(d) for d in df["cel_datuma"].tolist()]
-                fogy_t_gwh = [float(v) * 24 / 1000 for v in df["fogyasztas_mwh"].tolist()]
-                hom_t = [float(v) for v in df["homerseklet"].tolist()]
-                kolt_t = [float(v) for v in df["koltseg_mft"].tolist()]
-                modellek_t = df["modell"].tolist()
-                riadok_t = [bool(v) for v in df["riado"].tolist()]
-                eur_huf_t = float(df["eur_huf"].iloc[0])
-                
-                st.markdown(f"""
-                <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
-                            padding:12px 16px; margin:12px 0;">
-                    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px;">
-                        <div style="text-align:center;">
-                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Jóslás dátuma</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{valasztott_datum}</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti fogyasztás</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(fogy_t_gwh):.1f} GWh</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">Heti költség</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{sum(kolt_t)/1000:.1f} Mrd Ft</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="color:#64748b; font-size:10px; text-transform:uppercase;">EUR/HUF (akkor)</div>
-                            <div style="color:#FF6600; font-size:18px; font-weight:700;">{eur_huf_t:.1f} Ft</div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                tt1, tt2, tt3 = st.tabs(["📊 Fogyasztás", "💰 Költség", "🌡️ Hőmérséklet"])
-                with tt1:
-                    components.html(
-                        fogyasztas_chart(datumok_t, fogy_t_gwh, modellek_t, riadok_t, eur_huf_t),
-                        height=440, scrolling=False)
-                with tt2:
-                    components.html(
-                        koltseg_chart(datumok_t, kolt_t, eur_huf_t),
-                        height=440, scrolling=False)
-                with tt3:
-                    components.html(
-                        homerseklet_chart(datumok_t, hom_t),
-                        height=440, scrolling=False)
-                
-                st.markdown("### 📋 Részletes adatok")
-                df_display = df[["cel_datuma", "fogyasztas_mwh", "homerseklet", 
-                                 "dam_ar", "koltseg_mft", "modell", "riado"]].copy()
-                df_display.columns = ["Dátum", "Fogyasztás (MWh, óra-átlag)", "Hőmérséklet (°C)",
-                                     "DAM ár (EUR/MWh)", "Költség (M Ft)", "Modell", "Riasztás"]
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
+        st.markdown("""
+        <div style="background:#0a1628; border:1px solid #1e3a5f; border-radius:8px;
+                    padding:12px 16px; margin:8px 0;">
+            <span style="color:#93c5fd; font-size:13px; font-family:Inter,sans-serif;">
+            💡 <b>A negatív árak oka:</b> hétvégén és ünnepnapokon a napelemes túltermelés olyan szintet ér el,
+            hogy az eladó fizet a vevőnek az áram elviteléért. A HUPX tőzsde padlóára -500 EUR/MWh.
+            A jelenség 2024-2026-ban drasztikusan növekszik a megújuló kapacitás bővülésével.</span>
+        </div>""", unsafe_allow_html=True)
+else:
+    st.info("Kattints az Előrejelzés frissítése gombra!")
