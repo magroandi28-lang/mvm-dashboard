@@ -1,11 +1,8 @@
-streamlit>=1.32.0
-torch
-numpy
+streamlit
 pandas
-scikit-learn
+numpy
+xgboost
 joblib
 requests
 holidays
 entsoe-py
-plotly
-psycopg2-binary>=2.9.9
