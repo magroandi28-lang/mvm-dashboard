@@ -7,9 +7,13 @@ import holidays
 import requests
 import os
 import json
+import logging
 from datetime import datetime, timedelta
 from io import StringIO
 from entsoe import EntsoePandasClient
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="OkosMérő.hu", page_icon="⚡", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -44,13 +48,39 @@ def magyar_ma():
 
 @st.cache_resource
 def modell_betoltese():
-    return joblib.load(f"{BASE}/xgb_model.pkl")
+    path = f"{BASE}/xgb_model.pkl"
+    try:
+        return joblib.load(path)
+    except FileNotFoundError:
+        logger.error("Model file not found: %s", path)
+        st.error(f"A modell fájl nem található: {path}")
+        st.stop()
+    except Exception as exc:
+        logger.error("Failed to load model from %s: %s", path, exc)
+        st.error(f"Hiba a modell betöltésekor: {exc}")
+        st.stop()
+
 @st.cache_resource
 def stl_betoltese():
-    with open(f"{BASE}/stl_params.json", "r") as f:
-        params = json.load(f)
-    seasonal = pd.read_csv(f"{BASE}/stl_seasonal.csv", index_col=0, parse_dates=True)
-    return params, seasonal
+    params_path = f"{BASE}/stl_params.json"
+    seasonal_path = f"{BASE}/stl_seasonal.csv"
+    try:
+        with open(params_path, "r") as f:
+            params = json.load(f)
+        seasonal = pd.read_csv(seasonal_path, index_col=0, parse_dates=True)
+        return params, seasonal
+    except FileNotFoundError as exc:
+        logger.error("STL file not found: %s", exc)
+        st.error(f"STL fájl nem található: {exc}")
+        st.stop()
+    except (json.JSONDecodeError, pd.errors.ParserError) as exc:
+        logger.error("Failed to parse STL data: %s", exc)
+        st.error(f"Hiba az STL adatok olvasásakor: {exc}")
+        st.stop()
+    except Exception as exc:
+        logger.error("Unexpected error loading STL data: %s", exc)
+        st.error(f"Váratlan hiba az STL betöltésekor: {exc}")
+        st.stop()
 
 model = modell_betoltese()
 stl_params, stl_seasonal = stl_betoltese()
@@ -62,10 +92,23 @@ def get_eur_huf(_dk=None):
         r = requests.get("https://data-api.ecb.europa.eu/service/data/EXR/D.HUF.EUR.SP00.A",
             params={"startPeriod": (datetime.now()-timedelta(days=7)).strftime("%Y-%m-%d"),
                     "endPeriod": datetime.now().strftime("%Y-%m-%d"), "format": "csvdata"}, timeout=10)
+        r.raise_for_status()
         df = pd.read_csv(StringIO(r.text))[["TIME_PERIOD","OBS_VALUE"]].dropna()
         df["OBS_VALUE"] = pd.to_numeric(df["OBS_VALUE"], errors="coerce")
-        return float(df["OBS_VALUE"].dropna().iloc[-1]), True
-    except: return 395.0, False
+        values = df["OBS_VALUE"].dropna()
+        if values.empty:
+            logger.warning("EUR/HUF API returned no valid data")
+            return 395.0, False
+        return float(values.iloc[-1]), True
+    except requests.RequestException as exc:
+        logger.warning("EUR/HUF API request failed: %s", exc)
+        return 395.0, False
+    except (KeyError, IndexError, ValueError) as exc:
+        logger.warning("EUR/HUF API response parsing failed: %s", exc)
+        return 395.0, False
+    except Exception as exc:
+        logger.error("Unexpected error fetching EUR/HUF: %s", exc)
+        return 395.0, False
 
 @st.cache_data(ttl=600)
 def get_oras_idojaras(_dk=None):
@@ -77,6 +120,7 @@ def get_oras_idojaras(_dk=None):
                     "timezone":"Europe/Budapest",
                     "start_date":(ma+timedelta(days=1)).strftime("%Y-%m-%d"),
                     "end_date":(ma+timedelta(days=1)).strftime("%Y-%m-%d")}, timeout=15)
+        r.raise_for_status()
         d = r.json()
         return pd.DataFrame({"Datum":pd.to_datetime(d["hourly"]["time"]),
             "Homerseklet_C":d["hourly"]["temperature_2m"],
@@ -84,7 +128,20 @@ def get_oras_idojaras(_dk=None):
             "Napsugarzas_W_m2":d["hourly"]["direct_radiation"],
             "Szelsebesseg_kmh":d["hourly"]["wind_speed_10m"],
             "Csapadek_mm":d["hourly"]["precipitation"]}), True
-    except:
+    except requests.RequestException as exc:
+        logger.warning("Weather API request failed: %s", exc)
+        ma = magyar_ma()
+        h = [ma+timedelta(days=1,hours=i) for i in range(24)]
+        return pd.DataFrame({"Datum":h,"Homerseklet_C":[20]*24,"Paratartalom_szazalek":[60]*24,
+            "Napsugarzas_W_m2":[100]*24,"Szelsebesseg_kmh":[10]*24,"Csapadek_mm":[0]*24}), False
+    except (KeyError, ValueError) as exc:
+        logger.warning("Weather API response parsing failed: %s", exc)
+        ma = magyar_ma()
+        h = [ma+timedelta(days=1,hours=i) for i in range(24)]
+        return pd.DataFrame({"Datum":h,"Homerseklet_C":[20]*24,"Paratartalom_szazalek":[60]*24,
+            "Napsugarzas_W_m2":[100]*24,"Szelsebesseg_kmh":[10]*24,"Csapadek_mm":[0]*24}), False
+    except Exception as exc:
+        logger.error("Unexpected error fetching weather: %s", exc)
         ma = magyar_ma()
         h = [ma+timedelta(days=1,hours=i) for i in range(24)]
         return pd.DataFrame({"Datum":h,"Homerseklet_C":[20]*24,"Paratartalom_szazalek":[60]*24,
@@ -92,7 +149,9 @@ def get_oras_idojaras(_dk=None):
 
 @st.cache_data(ttl=600)
 def get_oras_load_history(_dk=None):
-    if not ENTSOE_API_KEY: return None, False
+    if not ENTSOE_API_KEY:
+        logger.info("ENTSOE_API_KEY not set, skipping load history")
+        return None, False
     try:
         c = EntsoePandasClient(api_key=ENTSOE_API_KEY); ma = magyar_ma()
         s = pd.Timestamp((ma-timedelta(days=8)).strftime("%Y-%m-%d"),tz="Europe/Budapest")
@@ -100,24 +159,45 @@ def get_oras_load_history(_dk=None):
         load = c.query_load("HU",start=s,end=e)
         if isinstance(load,pd.DataFrame): load=load.iloc[:,0]
         return load, True
-    except: return None, False
+    except requests.RequestException as exc:
+        logger.warning("ENTSO-E load history request failed: %s", exc)
+        return None, False
+    except Exception as exc:
+        logger.error("Unexpected error fetching load history: %s", exc)
+        return None, False
 
 @st.cache_data(ttl=300)
 def get_dam_ar_oras(_dk=None):
-    if not ENTSOE_API_KEY: return 100.0, None, False
+    if not ENTSOE_API_KEY:
+        logger.info("ENTSOE_API_KEY not set, skipping DAM prices")
+        return 100.0, None, False
     try:
         c = EntsoePandasClient(api_key=ENTSOE_API_KEY); ma = magyar_ma()
         hs = pd.Timestamp((ma+timedelta(days=1)).strftime("%Y-%m-%d"),tz="Europe/Budapest")
         try:
             ho = c.query_day_ahead_prices("HU",start=hs,end=hs+pd.Timedelta(days=1))
             da = float(ho.mean())
-        except: ho=None; da=100.0
+        except requests.RequestException as exc:
+            logger.warning("DAM hourly prices request failed: %s", exc)
+            ho = None
+            da = 100.0
+        except Exception as exc:
+            logger.warning("Error parsing DAM hourly prices: %s", exc)
+            ho = None
+            da = 100.0
         return da, ho, True
-    except: return 100.0, None, False
+    except requests.RequestException as exc:
+        logger.warning("ENTSO-E DAM request failed: %s", exc)
+        return 100.0, None, False
+    except Exception as exc:
+        logger.error("Unexpected error fetching DAM prices: %s", exc)
+        return 100.0, None, False
 
 @st.cache_data(ttl=600)
 def get_megujulo(_dk=None):
-    if not ENTSOE_API_KEY: return 500.0, 200.0, False
+    if not ENTSOE_API_KEY:
+        logger.info("ENTSOE_API_KEY not set, skipping renewables")
+        return 500.0, 200.0, False
     try:
         c = EntsoePandasClient(api_key=ENTSOE_API_KEY); ma = magyar_ma()
         s = pd.Timestamp((ma-timedelta(days=7)).strftime("%Y-%m-%d"),tz="Europe/Budapest")
@@ -127,7 +207,12 @@ def get_megujulo(_dk=None):
         wc = [x for x in g.columns if 'Wind' in str(x)]
         return (float(g[sc].sum(1).mean()) if sc else 500.0,
                 float(g[wc].sum(1).mean()) if wc else 200.0, True)
-    except: return 500.0, 200.0, False
+    except requests.RequestException as exc:
+        logger.warning("ENTSO-E renewables request failed: %s", exc)
+        return 500.0, 200.0, False
+    except Exception as exc:
+        logger.error("Unexpected error fetching renewables: %s", exc)
+        return 500.0, 200.0, False
 
 @st.cache_data(ttl=600)
 def get_aktualis_ho(_dk=None):
@@ -135,8 +220,17 @@ def get_aktualis_ho(_dk=None):
         r = requests.get("https://api.open-meteo.com/v1/forecast",
             params={"latitude":47.5,"longitude":19.0,"current_weather":"true",
                     "timezone":"Europe/Budapest"}, timeout=10)
+        r.raise_for_status()
         return float(r.json()["current_weather"]["temperature"]), True
-    except: return 25.0, False
+    except requests.RequestException as exc:
+        logger.warning("Current temperature API request failed: %s", exc)
+        return 25.0, False
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("Current temperature response parsing failed: %s", exc)
+        return 25.0, False
+    except Exception as exc:
+        logger.error("Unexpected error fetching current temperature: %s", exc)
+        return 25.0, False
 
 # === ELŐREJELZÉS ===
 def oras_elorejelzes(idojaras_df, dam_atlag, eur_huf, load_history,
